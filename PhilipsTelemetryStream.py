@@ -25,6 +25,7 @@ from TelemetryStream import TelemetryStream
 from TelemetryStream import TelemetryGUI
 from TelemetryStream import attach_loggers
 from QualityOfSignal import QualityOfSignal as QoS
+from collections import deque
 import multiprocessing as mp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -658,32 +659,54 @@ def update_plot(q_wave,q_nums):
     plt.draw()
     
     cnt = 0
+    buff_ECG = deque([None]*1792, maxlen=1792)
+    buff_tECG = deque([0]*1792, maxlen=1792)
+    buff_PPG = deque([None]*896, maxlen=896)
+    t_curr = 0
     
     while True:
-        t_ecg, s_ecg, t_pleth, s_pleth = q_wave.get() # waiting for queue data
+        t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get() # waiting for queue data
         
-        print("!!!!")
-        print(t_ecg) # 1792
-        print(t_pleth) # 896
-        line_ecg.set_data(t_ecg, s_ecg)
-        ax_wECG.set_xlim(t_ecg.min(), t_ecg.max())
-        ax_wECG.set_ylim(range_of['ecg'])
-        
-        line_pleth.set_data(t_pleth, s_pleth)
-        ax_wPPG.set_xlim(t_pleth.min(), t_pleth.max())
-        ax_wPPG.set_ylim(range_of['pleth'])
-        
-        # nums_HR, nums_SPO2 = q_nums.get()
-        # if nums_HR and nums_SPO2:
-        #     txt_HR.set_text("{0:.0f}".format(nums_HR))
-        #     txt_SPO2.set_text("{0:.0f}".format(nums_SPO2))
-        #     txt_MAP.set_text(cnt)
+        if HR and SPO2:
+            txt_HR.set_text("{0:.0f}".format(HR))
+            txt_SPO2.set_text("{0:.0f}".format(SPO2))
+            txt_MAP.set_text(cnt)
             
             # text_nums.set_text("HR:  {0:.0f}\nSpO2: {1:.0f}".format(nums_HR, nums_SPO2))
-        cnt = cnt + 1
+            
+        idx_curr = next((i for i, num in enumerate(t_ecg) if num > t_curr), 1791)
+        rem_idx = 1792-idx_curr
+        n_skip = 32
+        cnt = 0
+        start_time = time.time()
+        while rem_idx > 0:
+            buff_ECG.append(s_ecg[idx_curr])
+            buff_tECG.append(t_ecg[idx_curr])
+            idx_curr, rem_idx, cnt = idx_curr + 1, rem_idx - 1, cnt + 1
+            if cnt > n_skip:
+                line_ecg.set_data(list(buff_tECG), list(buff_ECG))
+                ax_wECG.set_xlim(buff_tECG[0], buff_tECG[-1])
+                plt.draw()
+                plt.pause(0.001)
+                cnt = cnt - n_skip
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"Code execution time: {execution_time} seconds")
+            # print("!!!!")
+        # print(t_ecg) # 1792
+        # print(t_pleth) # 896
         
-        plt.draw()
-        plt.pause(0.01)
+        # line_ecg.set_data(t_ecg, s_ecg)
+        # line_pleth.set_data(t_pleth, s_pleth)
+        
+        
+        ax_wECG.set_ylim(range_of['ecg'])
+        
+        # ax_wPPG.set_xlim(t_pleth.min(), t_pleth.max())
+        ax_wPPG.set_ylim(range_of['pleth'])
+        
+        # plt.draw()
+        # plt.pause(0.001)
         
         
 if __name__ == '__main__':
@@ -734,19 +757,21 @@ if __name__ == '__main__':
                     data = tstream.read(1, blocking=True)
                     if data:
                         temp = list(tstream.sampled_data.keys())
+                        HR = data.get('Heart Rate')
+                        SPO2 = data.get('SpO2')
                         
                         if ('ECG' in temp) and ('Pleth' in temp):
-                            channel_1 = tstream.sampled_data.get('ECG')
-                            channel_2 = tstream.sampled_data.get('Pleth')
-                            if (not channel_1) or (not channel_2):
+                            channel_ECG = tstream.sampled_data.get('ECG')
+                            channel_PPG = tstream.sampled_data.get('Pleth')
+                            if (not channel_ECG) or (not channel_PPG):
                                 print("not channel")
                             else:
-                                samples_1 = channel_1.get('samples')
-                                samples_2 = channel_2.get('samples')
+                                ECG = channel_ECG.get('samples')
+                                PPG = channel_PPG.get('samples')
 
-                                q_wave.put((samples_1.t, samples_1.y, samples_2.t, samples_2.y))
+                                q_wave.put((ECG.t, ECG.y, PPG.t, PPG.y, HR, SPO2))
                         
-                        q_nums.put((data.get('Heart Rate'), data.get('SpO2')))
+                        # q_nums.put((data.get('Heart Rate'), data.get('SpO2')))
                         
                         #self.display.update_data(data, tstream.sampled_data)
                         last_poll = now
