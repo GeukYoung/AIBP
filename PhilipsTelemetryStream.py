@@ -626,7 +626,7 @@ def update_plot(q_wave,q_nums):
     
     # ABP Wave
     ax_wABP = fig.add_subplot(gs[2,0:4])
-    ax_wABP.set_title("ABP", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * 3)
+    ax_wABP.set_title("raw ECG", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * 3)
     ax_wABP.set_xticklabels([])
     ax_wABP.set_yticklabels([])
     ax_wABP.tick_params(axis='both', which='both', length=0)
@@ -649,8 +649,8 @@ def update_plot(q_wave,q_nums):
     ax_nPPG.axis('off')
 
     ax_nBP = fig.add_subplot(gs[2, 4])
-    ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "BP", ha='left', va='center', color=colors[2], fontsize=fontsize_default*3, fontweight='bold')
-    txt_SBPDBP = ax_nBP.text(margin_left_numeric, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*6)
+    ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "FPS", ha='left', va='center', color=colors[2], fontsize=fontsize_default*3, fontweight='bold')
+    # txt_SBPDBP = ax_nBP.text(margin_left_numeric, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*6)
     txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*6)
     ax_nBP.axis('off')
     
@@ -663,73 +663,64 @@ def update_plot(q_wave,q_nums):
     plt.draw()
     print("!plot init done")
     
-    cnt = 0
     buff_ECG = deque([None]*1792, maxlen=1792)
     buff_tECG = deque([0]*1792, maxlen=1792)
     buff_PPG = deque([None]*896, maxlen=896)
+
+    buff_tdelta = deque(maxlen=8)
+    buff_base_time = deque(maxlen=4)
+    
+    t_pre = 0
     t_curr = 0
-    start_time = time.time()
+    t_update = 0
+    base_time = time.time()
     execution_time = 0.01
+    monitor_delay = 2
+    w_size = 5 # 5s window
+    t_ecg_last = 0
     while True:
-        t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get() # waiting for queue data
-        print("!data receive")
-        # print(len(t_ecg))
-        # print(t_ecg)
-        if HR and SPO2:
-            txt_HR.set_text("{0:.0f}".format(HR))
-            txt_SPO2.set_text("{0:.0f}".format(SPO2))
-            txt_MAP.set_text("{0:.0f} f/s".format(execution_time))
+        try:
+            t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0) # waiting for queue data
+            print("! data received")
+            if 1:
+                print("!! adjust delay time")
+                buff_tdelta.append(time.time() - t_ecg[-1])
+                buff_base_time.append(min(buff_tdelta))
+                base_time = sum(buff_base_time) / len(buff_base_time)
+                # print([time.time(), t_ecg[-1], base_time, t_ecg_last])
+                t_ecg_last = t_ecg[-1]
+
+            if HR and SPO2:
+                txt_HR.set_text("{0:.0f}".format(HR))
+                txt_SPO2.set_text("{0:.0f}".format(SPO2))
+                txt_MAP.set_text("{0:.0f} f/s".format(1/execution_time))
             
-            # text_nums.set_text("HR:  {0:.0f}\nSpO2: {1:.0f}".format(nums_HR, nums_SPO2))
+            line_ecg.set_data(t_ecg,s_ecg)
+            line_pleth.set_data(t_pleth,s_pleth)
+            line_abp.set_data(t_ecg,s_ecg)
             
-        idx_curr = next((i for i, num in enumerate(t_ecg) if num > t_curr), 1791)
-        t_curr = t_ecg[idx_curr]
-        # rem_idx = 1792-idx_curr
-        # n_skip = 5
-        # cnt = 0
-        w_size = 3 # 3s window
-        fps = 20
-        line_ecg.set_data(t_ecg,s_ecg)
-        line_pleth.set_data(t_pleth,s_pleth)
-        line_abp.set_data(t_ecg,s_ecg)
+        except:
+            i = 1
         
+        t_update = time.time() - base_time - monitor_delay
+        # print([t_update, t_ecg[-1], base_time])
+        ax_wECG.set_xlim(t_update - w_size, t_update)
+        ax_wPPG.set_xlim(t_update - w_size, t_update)
+        ax_wABP.set_xlim(t_ecg[0], t_ecg[-1])
+        plt.draw()
+        plt.pause(0.001)
         
-        while t_ecg[-1] > t_curr:
-            print(f"!t curr {t_curr}")
-            # buff_ECG.append(s_ecg[idx_curr])
-            # buff_tECG.append(t_ecg[idx_curr])
-            # idx_curr, rem_idx, cnt = idx_curr + 1, rem_idx - 1, cnt + 1
-            # if cnt > n_skip:
-            #     line_ecg.set_data(list(buff_tECG), list(buff_ECG))
-            #     ax_wECG.set_xlim(buff_tECG[0], buff_tECG[-1])
-            #     plt.draw()
-            #     plt.pause(0.001)
-            #     cnt = cnt - n_skip
-            # rem_idx = rem_idx - n_skip
-            
-            ax_wECG.set_xlim(t_curr - w_size, t_curr)
-            ax_wPPG.set_xlim(t_curr - w_size, t_curr)
-            ax_wABP.set_xlim(t_ecg[0], t_ecg[-1])
-            t_curr = t_curr + 1/fps
-            t_delay = 1/fps - execution_time
-            print(f"execution time: {execution_time} s")
-            print(f"delay time: {t_delay} s")
-            plt.draw()
-            if 1/fps > t_delay > 0:
-                plt.pause(t_delay-0.001)
-            end_time = time.time()
-            execution_time = end_time - start_time
-            # print(f"Code execution time: {execution_time} frames/s")
-            # print(f"Code execution time: {1/execution_time} frames/s")
-            start_time = time.time()
+        execution_time = time.time() - t_pre
+        t_pre = time.time()
+
+        if execution_time == 0:
+            execution_time = 0.01
             
         ax_wECG.set_ylim(range_of['ecg'])
         ax_wPPG.set_ylim(range_of['pleth'])
         ax_wABP.set_ylim(range_of['ecg'])
         # ax_wPPG.set_xlim(t_pleth.min(), t_pleth.max())
 
-        
-        
 if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
