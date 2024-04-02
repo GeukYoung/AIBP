@@ -28,6 +28,7 @@ from QualityOfSignal import QualityOfSignal as QoS
 from collections import deque
 import multiprocessing as mp
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 from matplotlib.animation import FuncAnimation
 
@@ -42,6 +43,7 @@ __version__ = '.'.join(__version_info__)
 
 # updated 0.7.3 accounts for 8000Hz data collection throughout
 
+logging.disable()
 
 # Wrapper for UCSF QoS code
 def qos(*args, **kwargs):
@@ -584,6 +586,8 @@ class PhilipsTelemetryStream(TelemetryStream):
             return ret
 
 def update_plot(q_wave,q_nums):
+    # mpl.rcParams['path.simplify'] = True
+    # mpl.rcParams['path.simplify_threshold'] = 1.0
     plt.style.use('dark_background')
     
     range_of = {'pleth': (0,5000),'ecg': (-1.5, 2)}
@@ -657,56 +661,73 @@ def update_plot(q_wave,q_nums):
     #             fontsize=11)
         
     plt.draw()
+    print("!plot init done")
     
     cnt = 0
     buff_ECG = deque([None]*1792, maxlen=1792)
     buff_tECG = deque([0]*1792, maxlen=1792)
     buff_PPG = deque([None]*896, maxlen=896)
     t_curr = 0
-    
+    start_time = time.time()
+    execution_time = 0.01
     while True:
         t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get() # waiting for queue data
-        
+        print("!data receive")
+        # print(len(t_ecg))
+        # print(t_ecg)
         if HR and SPO2:
             txt_HR.set_text("{0:.0f}".format(HR))
             txt_SPO2.set_text("{0:.0f}".format(SPO2))
-            txt_MAP.set_text(cnt)
+            txt_MAP.set_text("{0:.0f} f/s".format(execution_time))
             
             # text_nums.set_text("HR:  {0:.0f}\nSpO2: {1:.0f}".format(nums_HR, nums_SPO2))
             
         idx_curr = next((i for i, num in enumerate(t_ecg) if num > t_curr), 1791)
-        rem_idx = 1792-idx_curr
-        n_skip = 32
-        cnt = 0
-        start_time = time.time()
-        while rem_idx > 0:
-            buff_ECG.append(s_ecg[idx_curr])
-            buff_tECG.append(t_ecg[idx_curr])
-            idx_curr, rem_idx, cnt = idx_curr + 1, rem_idx - 1, cnt + 1
-            if cnt > n_skip:
-                line_ecg.set_data(list(buff_tECG), list(buff_ECG))
-                ax_wECG.set_xlim(buff_tECG[0], buff_tECG[-1])
-                plt.draw()
-                plt.pause(0.001)
-                cnt = cnt - n_skip
-        end_time = time.time()
-        execution_time = end_time - start_time
-        print(f"Code execution time: {execution_time} seconds")
-            # print("!!!!")
-        # print(t_ecg) # 1792
-        # print(t_pleth) # 896
-        
-        # line_ecg.set_data(t_ecg, s_ecg)
-        # line_pleth.set_data(t_pleth, s_pleth)
+        t_curr = t_ecg[idx_curr]
+        # rem_idx = 1792-idx_curr
+        # n_skip = 5
+        # cnt = 0
+        w_size = 3 # 3s window
+        fps = 20
+        line_ecg.set_data(t_ecg,s_ecg)
+        line_pleth.set_data(t_pleth,s_pleth)
+        line_abp.set_data(t_ecg,s_ecg)
         
         
+        while t_ecg[-1] > t_curr:
+            print(f"!t curr {t_curr}")
+            # buff_ECG.append(s_ecg[idx_curr])
+            # buff_tECG.append(t_ecg[idx_curr])
+            # idx_curr, rem_idx, cnt = idx_curr + 1, rem_idx - 1, cnt + 1
+            # if cnt > n_skip:
+            #     line_ecg.set_data(list(buff_tECG), list(buff_ECG))
+            #     ax_wECG.set_xlim(buff_tECG[0], buff_tECG[-1])
+            #     plt.draw()
+            #     plt.pause(0.001)
+            #     cnt = cnt - n_skip
+            # rem_idx = rem_idx - n_skip
+            
+            ax_wECG.set_xlim(t_curr - w_size, t_curr)
+            ax_wPPG.set_xlim(t_curr - w_size, t_curr)
+            ax_wABP.set_xlim(t_ecg[0], t_ecg[-1])
+            t_curr = t_curr + 1/fps
+            t_delay = 1/fps - execution_time
+            print(f"execution time: {execution_time} s")
+            print(f"delay time: {t_delay} s")
+            plt.draw()
+            if 1/fps > t_delay > 0:
+                plt.pause(t_delay-0.001)
+            end_time = time.time()
+            execution_time = end_time - start_time
+            # print(f"Code execution time: {execution_time} frames/s")
+            # print(f"Code execution time: {1/execution_time} frames/s")
+            start_time = time.time()
+            
         ax_wECG.set_ylim(range_of['ecg'])
-        
-        # ax_wPPG.set_xlim(t_pleth.min(), t_pleth.max())
         ax_wPPG.set_ylim(range_of['pleth'])
-        
-        # plt.draw()
-        # plt.pause(0.001)
+        ax_wABP.set_ylim(range_of['ecg'])
+        # ax_wPPG.set_xlim(t_pleth.min(), t_pleth.max())
+
         
         
 if __name__ == '__main__':
