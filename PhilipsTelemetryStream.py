@@ -588,23 +588,41 @@ class PhilipsTelemetryStream(TelemetryStream):
 def update_plot(q_wave,q_nums):
     # mpl.rcParams['path.simplify'] = True
     # mpl.rcParams['path.simplify_threshold'] = 1.0
+    
+    type_system = 2
+    
+    if type_system == 1: # for linux
+        fontsize_default = 6
+        margin_left_numtitle = -0.2
+        margin_top_numtitle = 1.15
+        margin_left_numeric = 0.2
+        margin_wspace, margin_hspace = 0.25, 0.5
+        margin_top, margin_bottom, margin_left, margin_right = 0.90, 0.05, 0.01, 0.88
+    elif type_system == 2: # for window
+        fontsize_default = 6
+        fontsize_title = 4
+        fontsize_numeric = 12
+        fontsize_numeric_BP = 6
+        margin_left_numtitle = -0.2
+        margin_top_numtitle = 1.1
+        margin_left_numeric = 0.2
+        margin_wspace, margin_hspace = 0.35, 0.25
+        margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
+        
     plt.style.use('dark_background')
     
-    range_of = {'pleth': (0,5000),'ecg': (-1.5, 2)}
+    range_of = {'pleth': (0,5000),'ecg': (-1.5, 2),'abp': (40, 140)}
     colors = ['lime', 'cyan', 'red']
-    fontsize_default = 6
-    margin_left_numtitle = -0.2
-    margin_top_numtitle = 1.15
-    margin_left_numeric = 0.2
 
     fig = plt.figure(figsize=(18,8))
-    fig.subplots_adjust(wspace=0.25, hspace=0.5, top=0.90, bottom=0.05, left=0.01, right = 0.88)
+    fig.subplots_adjust(wspace=margin_wspace, hspace=margin_hspace, top=margin_top, bottom=margin_bottom, left=margin_left, right = margin_right)
     
     gs = plt.GridSpec(nrows=3, ncols=5)
     
+    ## plot
     # ECG Wave
     ax_wECG = fig.add_subplot(gs[0,0:4])
-    ax_wECG.set_title("ECG", loc='left', fontweight='bold', color=colors[0], fontsize= fontsize_default * 3)
+    ax_wECG.set_title("ECG", loc='left', fontweight='bold', color=colors[0], fontsize= fontsize_default * fontsize_title)
     ax_wECG.set_xticklabels([])
     ax_wECG.set_yticklabels([])
     ax_wECG.tick_params(axis='both', which='both', length=0)
@@ -615,7 +633,7 @@ def update_plot(q_wave,q_nums):
     
     # PPG Wave
     ax_wPPG = fig.add_subplot(gs[1,0:4])
-    ax_wPPG.set_title("Pleth", loc='left', fontweight='bold', color=colors[1], fontsize= fontsize_default * 3)
+    ax_wPPG.set_title("Pleth", loc='left', fontweight='bold', color=colors[1], fontsize= fontsize_default * fontsize_title)
     ax_wPPG.set_xticklabels([])
     ax_wPPG.set_yticklabels([])
     ax_wPPG.tick_params(axis='both', which='both', length=0)
@@ -626,7 +644,8 @@ def update_plot(q_wave,q_nums):
     
     # ABP Wave
     ax_wABP = fig.add_subplot(gs[2,0:4])
-    ax_wABP.set_title("raw ECG", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * 3)
+    # ax_wABP.set_title("ABP", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title)
+    ax_wABP.set_title("raw ECG", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title) # for test
     ax_wABP.set_xticklabels([])
     ax_wABP.set_yticklabels([])
     ax_wABP.tick_params(axis='both', which='both', length=0)
@@ -638,28 +657,24 @@ def update_plot(q_wave,q_nums):
     ## text
     # HR Value Display
     ax_nECG = fig.add_subplot(gs[0, 4])
-    ax_nECG.text(margin_left_numtitle, margin_top_numtitle, "HR", ha='left', va='center', color=colors[0], fontsize=fontsize_default*3, fontweight='bold')
-    txt_HR = ax_nECG.text(margin_left_numeric, 0.5, "75", ha='left', va='center', color=colors[0], fontsize=fontsize_default*10)
+    ax_nECG.text(margin_left_numtitle, margin_top_numtitle, "HR", ha='left', va='center', color=colors[0], fontsize=fontsize_default*fontsize_title, fontweight='bold')
+    txt_HR = ax_nECG.text(margin_left_numeric, 0.5, "75", ha='left', va='center', color=colors[0], fontsize=fontsize_default*fontsize_numeric)
     ax_nECG.axis('off')
 
     # SpO2 and BP Text Display
     ax_nPPG = fig.add_subplot(gs[1, 4])
-    ax_nPPG.text(margin_left_numtitle, margin_top_numtitle, "SpO2", ha='left', va='center', color=colors[1], fontsize=fontsize_default*3, fontweight='bold')
-    txt_SPO2 = ax_nPPG.text(margin_left_numeric, 0.5, "100", ha='left', va='center', color=colors[1], fontsize=fontsize_default*10)
+    ax_nPPG.text(margin_left_numtitle, margin_top_numtitle, "SpO2", ha='left', va='center', color=colors[1], fontsize=fontsize_default*fontsize_title, fontweight='bold')
+    txt_SPO2 = ax_nPPG.text(margin_left_numeric, 0.5, "100", ha='left', va='center', color=colors[1], fontsize=fontsize_default*fontsize_numeric)
     ax_nPPG.axis('off')
 
     ax_nBP = fig.add_subplot(gs[2, 4])
-    ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "FPS", ha='left', va='center', color=colors[2], fontsize=fontsize_default*3, fontweight='bold')
-    # txt_SBPDBP = ax_nBP.text(margin_left_numeric, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*6)
-    txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*6)
+    # ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "ABP", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold')
+    ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "FPS", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold') # for fps display
+    # txt_SBPDBP = ax_nBP.text(margin_left_numeric, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
+    # txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
+    txt_MAP = ax_nBP.text(margin_left_numeric-0.05, 0.5, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*10) # for fps display
     ax_nBP.axis('off')
-    
-    # text_nums = fig.text(0.79, 0.95,
-    #             'HR: \nSpO2:',
-    #             horizontalalignment='left',
-    #             verticalalignment='center',
-    #             fontsize=11)
-        
+            
     plt.draw()
     print("!plot init done")
     
@@ -667,17 +682,14 @@ def update_plot(q_wave,q_nums):
     buff_tECG = deque([0]*1792, maxlen=1792)
     buff_PPG = deque([None]*896, maxlen=896)
 
-    buff_tdelta = deque(maxlen=8)
-    buff_base_time = deque(maxlen=4)
+    ## realtime update
+    buff_tdelta = deque(maxlen=8) # for timediff stacking
+    buff_base_time = deque(maxlen=4) # for smoothing
     
-    t_pre = 0
-    t_curr = 0
-    t_update = 0
     base_time = time.time()
-    execution_time = 0.01
-    monitor_delay = 2
-    w_size = 5 # 5s window
-    t_ecg_last = 0
+    t_pre, execution_time = 0, 0.01 # for fps calcurate
+    monitor_delay = 2 # 2s delay buff
+    w_size = 5 # 5s dysplay window
     while True:
         try:
             t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0) # waiting for queue data
@@ -688,7 +700,6 @@ def update_plot(q_wave,q_nums):
                 buff_base_time.append(min(buff_tdelta))
                 base_time = sum(buff_base_time) / len(buff_base_time)
                 # print([time.time(), t_ecg[-1], base_time, t_ecg_last])
-                t_ecg_last = t_ecg[-1]
 
             if HR and SPO2:
                 txt_HR.set_text("{0:.0f}".format(HR))
@@ -703,7 +714,6 @@ def update_plot(q_wave,q_nums):
             i = 1
         
         t_update = time.time() - base_time - monitor_delay
-        # print([t_update, t_ecg[-1], base_time])
         ax_wECG.set_xlim(t_update - w_size, t_update)
         ax_wPPG.set_xlim(t_update - w_size, t_update)
         ax_wABP.set_xlim(t_ecg[0], t_ecg[-1])
@@ -713,9 +723,9 @@ def update_plot(q_wave,q_nums):
         execution_time = time.time() - t_pre
         t_pre = time.time()
 
-        if execution_time == 0:
+        if execution_time == 0: # avoid zero division exception
             execution_time = 0.01
-            
+
         ax_wECG.set_ylim(range_of['ecg'])
         ax_wPPG.set_ylim(range_of['pleth'])
         ax_wABP.set_ylim(range_of['ecg'])
