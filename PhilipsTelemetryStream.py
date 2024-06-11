@@ -30,7 +30,11 @@ import multiprocessing as mp
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
+import bisect
 from matplotlib.animation import FuncAnimation
+from scipy import signal
+from scipy.signal import butter, filtfilt
+import tensorflow as tf
 
 import easydict
 args = easydict.EasyDict({
@@ -585,7 +589,7 @@ class PhilipsTelemetryStream(TelemetryStream):
                     ret.append(data)
             return ret
 
-def update_plot(q_wave,q_nums):
+def update_plot(q_wave,q_ABPoutput):
     # mpl.rcParams['path.simplify'] = True
     # mpl.rcParams['path.simplify_threshold'] = 1.0
     
@@ -602,7 +606,7 @@ def update_plot(q_wave,q_nums):
         fontsize_default = 6
         fontsize_title = 4
         fontsize_numeric = 12
-        fontsize_numeric_BP = 6
+        fontsize_numeric_BP = 8
         margin_left_numtitle = -0.2
         margin_top_numtitle = 1.1
         margin_left_numeric = 0.2
@@ -644,12 +648,12 @@ def update_plot(q_wave,q_nums):
     
     # ABP Wave
     ax_wABP = fig.add_subplot(gs[2,0:4])
-    # ax_wABP.set_title("ABP", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title)
-    ax_wABP.set_title("raw ECG", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title) # for test
+    ax_wABP.set_title("ABP estimated", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title)
+    # ax_wABP.set_title("raw ECG", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title) # for test
     ax_wABP.set_xticklabels([])
     ax_wABP.set_yticklabels([])
     ax_wABP.tick_params(axis='both', which='both', length=0)
-    ax_wABP.grid(axis='y', color=colors[2], linestyle='--', linewidth=0.5)
+    # ax_wABP.grid(axis='y', color=colors[2], linestyle='--', linewidth=0.5)
     for spine in ax_wABP.spines.values():
         spine.set_visible(False)
     line_abp, = ax_wABP.plot([],[], color=colors[2], linewidth=2)
@@ -668,19 +672,20 @@ def update_plot(q_wave,q_nums):
     ax_nPPG.axis('off')
 
     ax_nBP = fig.add_subplot(gs[2, 4])
-    # ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "ABP", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold')
-    ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "FPS", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold') # for fps display
-    # txt_SBPDBP = ax_nBP.text(margin_left_numeric, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
-    # txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
-    txt_MAP = ax_nBP.text(margin_left_numeric-0.05, 0.5, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*10) # for fps display
+    ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "ABP", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold')
+    # ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "FPS", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold') # for fps display
+    txt_SBPDBP = ax_nBP.text(margin_left_numeric - 0.05, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
+    txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
+    # txt_MAP = ax_nBP.text(margin_left_numeric-0.05, 0.5, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*10) # for fps display
     ax_nBP.axis('off')
             
     plt.draw()
     print("!plot init done")
     
-    buff_ECG = deque([None]*1792, maxlen=1792)
-    buff_tECG = deque([0]*1792, maxlen=1792)
-    buff_PPG = deque([None]*896, maxlen=896)
+    # buff_tECG = deque([0]*1792, maxlen=1792)
+    # buff_ECG = deque([None]*1792, maxlen=1792)
+    # buff_tPPG = deque([0]*1024, maxlen=1024)
+    # buff_PPG = deque([None]*1024, maxlen=1024)
 
     ## realtime update
     buff_tdelta = deque(maxlen=8) # for timediff stacking
@@ -693,9 +698,9 @@ def update_plot(q_wave,q_nums):
     while True:
         try:
             t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0) # waiting for queue data
-            print("! data received")
+            # print("! data received")
             if 1:
-                print("!! adjust delay time")
+                # print("!! adjust delay time")
                 buff_tdelta.append(time.time() - t_ecg[-1])
                 buff_base_time.append(min(buff_tdelta))
                 base_time = sum(buff_base_time) / len(buff_base_time)
@@ -704,19 +709,36 @@ def update_plot(q_wave,q_nums):
             if HR and SPO2:
                 txt_HR.set_text("{0:.0f}".format(HR))
                 txt_SPO2.set_text("{0:.0f}".format(SPO2))
-                txt_MAP.set_text("{0:.0f} f/s".format(1/execution_time))
+                # txt_MAP.set_text("{0:.0f} f/s".format(1/execution_time))
             
             line_ecg.set_data(t_ecg,s_ecg)
             line_pleth.set_data(t_pleth,s_pleth)
-            line_abp.set_data(t_ecg,s_ecg)
+            # line_abp.set_data(t_ecg,s_ecg)
             
+        except:
+            i = 1
+        
+        try:
+            predict_abp, wave_tPPG, abp_wave = q_ABPoutput.get(timeout=0)
+            min_abp_wave, max_abp_wave = min(abp_wave), max(abp_wave)
+            gap_abp_wave = max_abp_wave - min_abp_wave
+            axis_max_wave = max_abp_wave + 0.1*gap_abp_wave
+            axis_min_wave = min_abp_wave - 0.1*gap_abp_wave
+            ax_wABP.set_ylim((axis_min_wave, axis_max_wave))
+            
+            line_abp.set_data(wave_tPPG,abp_wave)
+            txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[0])+"/"+"{0:.0f}".format(predict_abp[1]))
+            txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
+            # txt_SBPDBP = ax_nBP.text(margin_left_numeric, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
+            # txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
+
         except:
             i = 1
         
         t_update = time.time() - base_time - monitor_delay
         ax_wECG.set_xlim(t_update - w_size, t_update)
         ax_wPPG.set_xlim(t_update - w_size, t_update)
-        ax_wABP.set_xlim(t_ecg[0], t_ecg[-1])
+        ax_wABP.set_xlim(t_update - w_size, t_update)
         plt.draw()
         plt.pause(0.001)
         
@@ -728,9 +750,122 @@ def update_plot(q_wave,q_nums):
 
         ax_wECG.set_ylim(range_of['ecg'])
         ax_wPPG.set_ylim(range_of['pleth'])
-        ax_wABP.set_ylim(range_of['ecg'])
+        
         # ax_wPPG.set_xlim(t_pleth.min(), t_pleth.max())
 
+def find_first_greater(arr, target):
+    # bisect_right는 target보다 큰 첫 번째 요소의 인덱스를 반환합니다.
+    index = bisect.bisect_right(arr, target)
+    # index가 배열의 길이와 같으면, target보다 큰 요소가 없는 경우입니다.
+    return index if index < len(arr) else -1
+
+## ABP estimation part
+def normalize_data(data, data_min, data_max, normalized_min, normalized_max):
+    if data_min == data_max:
+        print("Error: Data minimum and maximum values are equal.")
+        return None
+
+    if normalized_min >= normalized_max:
+        print("Error: Normalization range is invalid.")
+        return None
+
+    # 데이터를 normalized_min 에서 normalized_max 로 정규화합니다.
+    normalized_data = normalized_min + (data - data_min) * ((normalized_max - normalized_min) / (data_max - data_min))
+    return normalized_data
+
+def denormalize_data(normalized_data, data_min, data_max, normalized_min, normalized_max):
+    if normalized_min >= normalized_max:
+        print("Error: Normalization range is invalid.")
+        return None
+
+    if normalized_data is None:
+        print("Error: Normalized data is None.")
+        return None
+
+    # 정규화된 데이터를 다시 원래 데이터로 복원합니다.
+    data = ((normalized_data - normalized_min) * (data_max - data_min) / (normalized_max - normalized_min)) + data_min
+    return data
+
+# min/max ormalization
+def minmax_normalize(signal):
+    min_val = np.min(signal)
+    max_val = np.max(signal)
+    normalized_signal = (signal - min_val) / (max_val - min_val)
+    return normalized_signal, min_val, max_val
+
+# restoring function
+def minmax_restore(normalized_signal, min_val, max_val):
+    original_signal = normalized_signal * (max_val - min_val) + min_val
+    return original_signal
+
+def apply_band_pass_filter(data, lowcut, highcut, sampling_frequency, order=4, padlen=None):
+    nyquist_frequency = 0.5 * sampling_frequency
+    low = lowcut / nyquist_frequency
+    high = highcut / nyquist_frequency
+
+    b, a = butter(order, [low, high], btype='band', analog=False)
+
+    if padlen is not None:
+        f_data = filtfilt(b, a, data, padlen=padlen)
+    else:
+        f_data = filtfilt(b, a, data)
+
+    return f_data
+
+def apply_low_pass_filter(data, cutoff, sampling_frequency, order=4, padlen=None):
+    nyquist_frequency = 0.5 * sampling_frequency
+    normalized_cutoff = cutoff / nyquist_frequency
+
+    b, a = butter(order, normalized_cutoff, btype='low', analog=False)
+
+    if padlen is not None:
+        f_data = filtfilt(b, a, data, padlen=padlen)
+    else:
+        f_data = filtfilt(b, a, data)
+
+    return f_data
+
+def check_none(arr):
+    return np.any([element is None for element in arr])
+
+def esti_ABP(q_ABPinput, q_ABPoutput):
+    # global abp_model, wave_model
+    abp_model = tf.keras.models.load_model('ABP_model_tf')
+    wave_model = tf.keras.models.load_model('wave_model_tf')
+    
+    # DBP/SBP/MAP Normaization
+    abp_data_min = 20
+    abp_data_max = 200
+    abp_normalized_min = 0
+    abp_normalized_max = 1
+
+    # Cutoff frequency of lowpass filter
+    cutoff_high = 12
+    SAMPLING_RATE = 125
+
+    while True:
+        if not q_ABPinput.empty():
+            wave_tPPG, wave_PPG = q_ABPinput.get_nowait()
+            
+            if ~check_none(wave_PPG):
+                print("get ABP input")
+                predict_result = abp_model.predict(np.reshape(list(wave_PPG), (1, 1024)), verbose=0)
+                predict_result = np.array(predict_result)
+                predict_result = predict_result.reshape(-1)
+                predict_abp  = denormalize_data(predict_result, abp_data_min, abp_data_max, abp_normalized_min, abp_normalized_max)
+                # print(predict_abp)
+        
+                normalized_ppg, min_val, max_val = minmax_normalize(wave_PPG)
+                results = wave_model.predict(np.reshape(normalized_ppg, (1, 1024)), verbose=0)
+                results = np.array(results)
+                predictions = tf.squeeze(results, axis=-1)
+                predict_wave = predictions [0]
+                abp_wave = apply_low_pass_filter(predict_wave, cutoff_high, SAMPLING_RATE)
+                # print(abp_wave)
+                
+                # q_ABPoutput.put((predict_abp, abp_wave))
+                q_ABPoutput.put((predict_abp, wave_tPPG, abp_wave))
+                
 if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
@@ -762,10 +897,23 @@ if __name__ == '__main__':
         # gui = TelemetryGUI(tstream, type=opts.gui, redraw_interval=0.05)
         # gui = TelemetryGUI(tstream) # by JG
         # gui.run(blocking=True)
+        # global abp_model, wave_model
+        # abp_model = tf.keras.models.load_model('ABP_model_tf')
+        # wave_model = tf.keras.models.load_model('wave_model_tf')
+        print("!!!!!!!!!!!!! tf import done")
+    
+        buff_tPPG = deque([0]*1024, maxlen=1024)
+        buff_PPG = deque([None]*1024, maxlen=1024)
+        
         q_wave = mp.Queue()
-        q_nums = mp.Queue()
-        p_plot = mp.Process(target=update_plot, args=(q_wave,q_nums))
+        q_ABPoutput = mp.Queue()
+        p_plot = mp.Process(target=update_plot, args=(q_wave,q_ABPoutput))
         p_plot.start()
+        
+        q_ABPinput = mp.Queue()
+        # q_ABPoutput = mp.Queue()
+        p_ABP = mp.Process(target=esti_ABP, args=(q_ABPinput,q_ABPoutput))
+        p_ABP.start()
         
         redraw_interval = 0.1
         last_poll = time.time()
@@ -790,10 +938,13 @@ if __name__ == '__main__':
                             else:
                                 ECG = channel_ECG.get('samples')
                                 PPG = channel_PPG.get('samples')
-
-                                q_wave.put((ECG.t, ECG.y, PPG.t, PPG.y, HR, SPO2))
-                        
-                        # q_nums.put((data.get('Heart Rate'), data.get('SpO2')))
+                                idx_update = find_first_greater(PPG.t, buff_tPPG[-1])
+                                if idx_update >= 0:
+                                    buff_tPPG.extend(PPG.t[idx_update:])
+                                    buff_PPG.extend(PPG.y[idx_update:])
+                                q_wave.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, HR, SPO2))
+                                q_ABPinput.put((buff_tPPG, buff_PPG))
+                        # q_ABPoutput.put((data.get('Heart Rate'), data.get('SpO2')))
                         
                         #self.display.update_data(data, tstream.sampled_data)
                         last_poll = now
@@ -808,5 +959,7 @@ if __name__ == '__main__':
             q_wave.put('done')
             p_plot.join()
             tstream.close()
+
+
 
 # %%
