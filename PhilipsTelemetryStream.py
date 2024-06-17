@@ -606,7 +606,7 @@ def update_plot(q_wave,q_ABPoutput):
         fontsize_default = 6
         fontsize_title = 4
         fontsize_numeric = 12
-        fontsize_numeric_BP = 8
+        fontsize_numeric_BP = 10
         margin_left_numtitle = -0.2
         margin_top_numtitle = 1.1
         margin_left_numeric = 0.2
@@ -674,8 +674,8 @@ def update_plot(q_wave,q_ABPoutput):
     ax_nBP = fig.add_subplot(gs[2, 4])
     ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "ABP", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold')
     # ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "FPS", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold') # for fps display
-    txt_SBPDBP = ax_nBP.text(margin_left_numeric - 0.05, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
-    txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
+    txt_SBPDBP = ax_nBP.text(margin_left_numeric - 0.25, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
+    txt_MAP = ax_nBP.text(margin_left_numeric - 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
     # txt_MAP = ax_nBP.text(margin_left_numeric-0.05, 0.5, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*10) # for fps display
     ax_nBP.axis('off')
             
@@ -727,7 +727,7 @@ def update_plot(q_wave,q_ABPoutput):
             ax_wABP.set_ylim((axis_min_wave, axis_max_wave))
             
             line_abp.set_data(wave_tPPG,abp_wave)
-            txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[0])+"/"+"{0:.0f}".format(predict_abp[1]))
+            txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1])+"/"+"{0:.0f}".format(predict_abp[0]))
             txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
             # txt_SBPDBP = ax_nBP.text(margin_left_numeric, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
             # txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
