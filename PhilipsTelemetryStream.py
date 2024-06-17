@@ -32,6 +32,8 @@ import matplotlib as mpl
 import numpy as np
 import bisect
 from matplotlib.animation import FuncAnimation
+import matplotlib.image as mpimg
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from scipy import signal
 from scipy.signal import butter, filtfilt
 import tensorflow as tf
@@ -602,17 +604,23 @@ def update_plot(q_wave,q_ABPoutput):
         margin_left_numeric = 0.2
         margin_wspace, margin_hspace = 0.25, 0.5
         margin_top, margin_bottom, margin_left, margin_right = 0.90, 0.05, 0.01, 0.88
+        icon_zoom = 0.025
     elif type_system == 2: # for window
         fontsize_default = 6
         fontsize_title = 4
         fontsize_numeric = 12
         fontsize_numeric_BP = 10
         margin_left_numtitle = -0.2
-        margin_top_numtitle = 1.1
+        margin_top_numtitle = 1.09
         margin_left_numeric = 0.2
         margin_wspace, margin_hspace = 0.35, 0.25
         margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
-        
+        icon_zoom = 0.025
+    
+    image_path = 'AI_logo.png'  # 여기에 아이콘 이미지 경로를 입력하세요.
+    icon_AI = mpimg.imread(image_path)
+    imagebox = OffsetImage(icon_AI, zoom=icon_zoom)
+    
     plt.style.use('dark_background')
     
     range_of = {'pleth': (0,5000),'ecg': (-1.5, 2),'abp': (40, 140)}
@@ -648,7 +656,9 @@ def update_plot(q_wave,q_ABPoutput):
     
     # ABP Wave
     ax_wABP = fig.add_subplot(gs[2,0:4])
-    ax_wABP.set_title("ABP estimated", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title)
+    ax_wABP.set_title("ABP", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title)
+    art_icon1 = AnnotationBbox(imagebox, (0, 1.07), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
+    ax_wABP.add_artist(art_icon1)
     # ax_wABP.set_title("raw ECG", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title) # for test
     ax_wABP.set_xticklabels([])
     ax_wABP.set_yticklabels([])
@@ -678,6 +688,8 @@ def update_plot(q_wave,q_ABPoutput):
     txt_MAP = ax_nBP.text(margin_left_numeric - 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
     # txt_MAP = ax_nBP.text(margin_left_numeric-0.05, 0.5, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*10) # for fps display
     ax_nBP.axis('off')
+    art_icon2 = AnnotationBbox(imagebox, (0, 1.07), xycoords='axes fraction', frameon=False, box_alignment=(-0.45, 0))
+    ax_nBP.add_artist(art_icon2)
             
     plt.draw()
     print("!plot init done")
