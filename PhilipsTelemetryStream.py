@@ -883,25 +883,25 @@ if __name__ == '__main__':
 
     # 포트의 수 확인
     if len(ports) == 1:
-        port, desc, hwid = ports[0]
-        print(f"사용 중인 COM 포트: {port}")
+        port_sel, desc, hwid = ports[0]
+        print(f"사용 중인 COM 포트: {port_sel}")
     elif len(ports) > 1:
         print("여러 개의 COM 포트가 발견되었습니다. 선택하십시오:")
-        for idx, (port, desc, hwid) in enumerate(ports, start=1):
-            print(f"{idx}. {port}: {desc} [{hwid}]")
+        for idx, (port_sel, desc, hwid) in enumerate(ports, start=1):
+            print(f"{idx}. {port_sel}: {desc} [{hwid}]")
         
         # 유저 입력 받기
         selected_idx = int(input("사용할 COM 포트 번호를 선택하세요: ")) - 1
         
         if 0 <= selected_idx < len(ports):
-            port, desc, hwid = ports[selected_idx]
-            print(f"선택한 COM 포트: {port}")
+            port_sel, desc, hwid = ports[selected_idx]
+            print(f"선택한 COM 포트: {port_sel}")
         else:
             print("잘못된 선택입니다.")
     else:
         print("사용 중인 COM 포트가 없습니다.")
         
-    tstream = PhilipsTelemetryStream(port={port},
+    tstream = PhilipsTelemetryStream(port=port_sel,
                                      values=["Pleth", 32*4, 'ECG', 64*4],
                                      polling_interval=0.05)
 
