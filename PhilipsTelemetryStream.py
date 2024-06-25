@@ -37,6 +37,7 @@ from scipy.signal import butter, filtfilt
 from functools import partial
 import tensorflow as tf
 import serial
+import os
 import easydict
 args = easydict.EasyDict({
     "gui": "SimpleStripchart",
@@ -590,7 +591,7 @@ class PhilipsTelemetryStream(TelemetryStream):
                     ret.append(data)
             return ret
 
-def update_plot(q_wave,q_ABPoutput):
+def update_plot(q_wave, q_ABPoutput, stop_event):
     # mpl.rcParams['path.simplify'] = True
     # mpl.rcParams['path.simplify_threshold'] = 1.0
     
@@ -720,9 +721,16 @@ def update_plot(q_wave,q_ABPoutput):
                 ax.set_ylim([ymin - ratio_gap*gap, ymax + ratio_gap*gap])
                 fig.canvas.draw()
 
+    def on_close(event):
+        print("Figure closed.")
+        stop_event.set()
+
     # 그래프 클릭 이벤트 연결
     fig.canvas.mpl_connect('button_press_event', partial(on_click, fig=fig, axes=[ax_wECG, ax_wPPG, ax_wABP]))
     
+    # figure 창 닫힘 이벤트 연결
+    fig.canvas.mpl_connect('close_event', on_close)
+
     # buff_tECG = deque([0]*1792, maxlen=1792)
     # buff_ECG = deque([None]*1792, maxlen=1792)
     # buff_tPPG = deque([0]*1024, maxlen=1024)
@@ -743,7 +751,7 @@ def update_plot(q_wave,q_ABPoutput):
     w_size = 5 # 5s dysplay window
     abplim_first = 1
 
-    while True:
+    while not stop_event.is_set():
         ## ECG & PPG data receive 
         try:
             t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0) # waiting for queue data
@@ -993,9 +1001,10 @@ if __name__ == '__main__':
         buff_tPPG = deque([0]*1024, maxlen=1024)
         buff_PPG = deque([None]*1024, maxlen=1024)
         
+        stop_event = mp.Event()
         q_wave = mp.Queue()
         q_ABPoutput = mp.Queue()
-        p_plot = mp.Process(target=update_plot, args=(q_wave,q_ABPoutput))
+        p_plot = mp.Process(target=update_plot, args=(q_wave, q_ABPoutput, stop_event))
         p_plot.start()
         
         q_ABPinput = mp.Queue()
@@ -1010,7 +1019,7 @@ if __name__ == '__main__':
         tstream.open()
         
         try:
-            while 1:
+            while not stop_event.is_set():
                 now = time.time()
                 if now > (last_poll + tstream.polling_interval):
                     data = tstream.read(1, blocking=True)
@@ -1045,11 +1054,22 @@ if __name__ == '__main__':
                 #     #self.display.redraw()
                 #     last_redraw = now
                 # time.sleep(redraw_interval/2)
-            
-        except:
+            print("Process end")
             q_wave.put('done')
-            p_plot.join()
+            p_plot.terminate()
+            p_ABP.terminate()
             tstream.close()
+            os._exit(0)
+
+        except:
+            print("Process exception occur!")
+            q_wave.put('done')
+            p_plot.terminate()
+            p_ABP.terminate()
+            tstream.close()
+            os._exit(0)
+
+            
 
 
 
