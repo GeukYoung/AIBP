@@ -605,11 +605,22 @@ def update_plot(q_wave,q_ABPoutput):
         margin_wspace, margin_hspace = 0.25, 0.5
         margin_top, margin_bottom, margin_left, margin_right = 0.90, 0.05, 0.01, 0.88
         icon_zoom = 0.025
-    elif type_system == 2: # for window
+    elif type_system == 2: # for surface
         fontsize_default = 6
         fontsize_title = 4
         fontsize_numeric = 12
         fontsize_numeric_BP = 10
+        margin_left_numtitle = -0.2
+        margin_top_numtitle = 1.09
+        margin_left_numeric = 0.2
+        margin_wspace, margin_hspace = 0.35, 0.25
+        margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
+        icon_zoom = 0.025
+    elif type_system == 3: # for window
+        fontsize_default = 6
+        fontsize_title = 4
+        fontsize_numeric = 12
+        fontsize_numeric_BP = 8
         margin_left_numtitle = -0.2
         margin_top_numtitle = 1.09
         margin_left_numeric = 0.2
@@ -688,8 +699,8 @@ def update_plot(q_wave,q_ABPoutput):
     txt_MAP = ax_nBP.text(margin_left_numeric - 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
     # txt_MAP = ax_nBP.text(margin_left_numeric-0.05, 0.5, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*10) # for fps display
     ax_nBP.axis('off')
-    art_icon2 = AnnotationBbox(imagebox, (0, 1.07), xycoords='axes fraction', frameon=False, box_alignment=(-0.45, 0))
-    ax_nBP.add_artist(art_icon2)
+    # art_icon2 = AnnotationBbox(imagebox, (0, 1.07), xycoords='axes fraction', frameon=False, box_alignment=(-0.45, 0))
+    # ax_nBP.add_artist(art_icon2)
             
     plt.draw()
     print("!plot init done")
@@ -700,10 +711,15 @@ def update_plot(q_wave,q_ABPoutput):
     # buff_PPG = deque([None]*1024, maxlen=1024)
 
     ## realtime update
-    buff_tdelta = deque(maxlen=8) # for timediff stacking
-    buff_base_time = deque(maxlen=4) # for smoothing
+    buff_tdelta_ecg = deque(maxlen=8) # for timediff stacking
+    buff_base_time_ecg = deque(maxlen=4) # for smoothing
+
+    buff_tdelta_ppg = deque(maxlen=8) # for timediff stacking
+    buff_base_time_ppg = deque(maxlen=4) # for smoothing
     
-    base_time = time.time()
+    base_time_ecg = time.time()
+    base_time_ppg = time.time()
+    delay_ecgppg = 0
     t_pre, execution_time = 0, 0.01 # for fps calcurate
     monitor_delay = 2 # 2s delay buff
     w_size = 5 # 5s dysplay window
@@ -713,9 +729,14 @@ def update_plot(q_wave,q_ABPoutput):
             # print("! data received")
             if 1:
                 # print("!! adjust delay time")
-                buff_tdelta.append(time.time() - t_ecg[-1])
-                buff_base_time.append(min(buff_tdelta))
-                base_time = sum(buff_base_time) / len(buff_base_time)
+                buff_tdelta_ecg.append(time.time() - t_ecg[-1])
+                buff_base_time_ecg.append(min(buff_tdelta_ecg))
+                base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
+
+                buff_tdelta_ppg.append(time.time() - t_pleth[-1])
+                buff_base_time_ppg.append(min(buff_tdelta_ppg))
+                base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
+                # delay_ecgppg = t_pleth[-1] - t_ecg[-1]
                 # print([time.time(), t_ecg[-1], base_time, t_ecg_last])
 
             if HR and SPO2:
@@ -726,7 +747,10 @@ def update_plot(q_wave,q_ABPoutput):
             line_ecg.set_data(t_ecg,s_ecg)
             line_pleth.set_data(t_pleth,s_pleth)
             # line_abp.set_data(t_ecg,s_ecg)
-            
+            # print("!time info")
+            # print((t_ecg[0], t_pleth[0], t_ecg[-1], t_pleth[-1]))
+            # print(t_ecg)
+            # print(t_pleth)
         except:
             i = 1
         
@@ -734,9 +758,9 @@ def update_plot(q_wave,q_ABPoutput):
             predict_abp, wave_tPPG, abp_wave = q_ABPoutput.get(timeout=0)
             min_abp_wave, max_abp_wave = min(abp_wave), max(abp_wave)
             gap_abp_wave = max_abp_wave - min_abp_wave
-            axis_max_wave = max_abp_wave + 0.1*gap_abp_wave
-            axis_min_wave = min_abp_wave - 0.1*gap_abp_wave
-            ax_wABP.set_ylim((axis_min_wave, axis_max_wave))
+            axis_max_abp_wave = max_abp_wave + 0.1*gap_abp_wave
+            axis_min_abp_wave = min_abp_wave - 0.1*gap_abp_wave
+            ax_wABP.set_ylim((axis_min_abp_wave, axis_max_abp_wave))
             
             line_abp.set_data(wave_tPPG,abp_wave)
             txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1])+"/"+"{0:.0f}".format(predict_abp[0]))
@@ -747,13 +771,15 @@ def update_plot(q_wave,q_ABPoutput):
         except:
             i = 1
         
-        t_update = time.time() - base_time - monitor_delay
+        t_update = time.time() - base_time_ecg - monitor_delay
         ax_wECG.set_xlim(t_update - w_size, t_update)
+        t_update = time.time() - base_time_ppg - monitor_delay
         ax_wPPG.set_xlim(t_update - w_size, t_update)
         ax_wABP.set_xlim(t_update - w_size, t_update)
         plt.draw()
         plt.pause(0.001)
-        
+        print((base_time_ecg,base_time_ppg))
+        print(t_ecg[-1],t_pleth[-1])
         execution_time = time.time() - t_pre
         t_pre = time.time()
 
@@ -761,8 +787,19 @@ def update_plot(q_wave,q_ABPoutput):
             execution_time = 0.01
 
         ax_wECG.set_ylim(range_of['ecg'])
+
+        # if ~check_none(s_pleth):
+        #     min_ppg_wave, max_ppg_wave = min(s_pleth), max(s_pleth)
+        #     gap_ppg_wave = max_ppg_wave - min_ppg_wave
+        #     axis_max_ppg_wave = max_ppg_wave + 0.1*gap_ppg_wave
+        #     axis_min_ppg_wave = min_ppg_wave - 0.1*gap_ppg_wave
+        #     ax_wPPG.set_ylim((axis_min_ppg_wave, axis_max_ppg_wave))
+        #     print("!ppg data:")
+        #     print((axis_min_ppg_wave, axis_max_ppg_wave))
+        #     print(s_pleth)
+        # else:
+        #     ax_wPPG.set_ylim(range_of['pleth'])
         ax_wPPG.set_ylim(range_of['pleth'])
-        
         # ax_wPPG.set_xlim(t_pleth.min(), t_pleth.max())
 
 def find_first_greater(arr, target):
