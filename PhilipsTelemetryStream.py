@@ -609,24 +609,24 @@ def update_plot(q_wave,q_ABPoutput):
         fontsize_default = 6
         fontsize_title = 4
         fontsize_numeric = 12
-        fontsize_numeric_BP = 10
-        margin_left_numtitle = -0.2
-        margin_top_numtitle = 1.09
-        margin_left_numeric = 0.2
-        margin_wspace, margin_hspace = 0.35, 0.25
-        margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
-        icon_zoom = 0.025
-    elif type_system == 3: # for window
-        fontsize_default = 6
-        fontsize_title = 4
-        fontsize_numeric = 12
         fontsize_numeric_BP = 8
         margin_left_numtitle = -0.2
         margin_top_numtitle = 1.09
         margin_left_numeric = 0.2
         margin_wspace, margin_hspace = 0.35, 0.25
         margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
-        icon_zoom = 0.025
+        icon_zoom = 0.04
+    elif type_system == 3: # for window
+        fontsize_default = 6
+        fontsize_title = 4
+        fontsize_numeric = 12
+        fontsize_numeric_BP = 10
+        margin_left_numtitle = -0.2
+        margin_top_numtitle = 1.09
+        margin_left_numeric = 0.2
+        margin_wspace, margin_hspace = 0.35, 0.25
+        margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
+        icon_zoom = 0.04
     
     image_path = 'AI_logo.png'  # 여기에 아이콘 이미지 경로를 입력하세요.
     icon_AI = mpimg.imread(image_path)
@@ -668,7 +668,7 @@ def update_plot(q_wave,q_ABPoutput):
     # ABP Wave
     ax_wABP = fig.add_subplot(gs[2,0:4])
     ax_wABP.set_title("ABP", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title)
-    art_icon1 = AnnotationBbox(imagebox, (0, 1.07), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
+    art_icon1 = AnnotationBbox(imagebox, (0.0001, 1.01), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
     ax_wABP.add_artist(art_icon1)
     # ax_wABP.set_title("raw ECG", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title) # for test
     ax_wABP.set_xticklabels([])
@@ -696,12 +696,15 @@ def update_plot(q_wave,q_ABPoutput):
     ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "ABP", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold')
     # ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "FPS", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold') # for fps display
     txt_SBPDBP = ax_nBP.text(margin_left_numeric - 0.25, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
-    txt_MAP = ax_nBP.text(margin_left_numeric - 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
+    txt_MAP = ax_nBP.text(margin_left_numeric - 0.04, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
     # txt_MAP = ax_nBP.text(margin_left_numeric-0.05, 0.5, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*10) # for fps display
     ax_nBP.axis('off')
     # art_icon2 = AnnotationBbox(imagebox, (0, 1.07), xycoords='axes fraction', frameon=False, box_alignment=(-0.45, 0))
     # ax_nBP.add_artist(art_icon2)
-            
+
+    # FPS
+    txt_FPS = ax_nBP.text(1.01, 3.6, "-/-", ha='right', va='center', color=colors[0], fontsize=fontsize_default*fontsize_numeric_BP*0.5)
+
     plt.draw()
     print("!plot init done")
     
@@ -726,7 +729,6 @@ def update_plot(q_wave,q_ABPoutput):
     while True:
         try:
             t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0) # waiting for queue data
-            # print("! data received")
             if 1:
                 # print("!! adjust delay time")
                 buff_tdelta_ecg.append(time.time() - t_ecg[-1])
@@ -742,15 +744,9 @@ def update_plot(q_wave,q_ABPoutput):
             if HR and SPO2:
                 txt_HR.set_text("{0:.0f}".format(HR))
                 txt_SPO2.set_text("{0:.0f}".format(SPO2))
-                # txt_MAP.set_text("{0:.0f} f/s".format(1/execution_time))
             
             line_ecg.set_data(t_ecg,s_ecg)
             line_pleth.set_data(t_pleth,s_pleth)
-            # line_abp.set_data(t_ecg,s_ecg)
-            # print("!time info")
-            # print((t_ecg[0], t_pleth[0], t_ecg[-1], t_pleth[-1]))
-            # print(t_ecg)
-            # print(t_pleth)
         except:
             i = 1
         
@@ -767,27 +763,18 @@ def update_plot(q_wave,q_ABPoutput):
             txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
             # txt_SBPDBP = ax_nBP.text(margin_left_numeric, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
             # txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
-
         except:
             i = 1
         
+        # Xlim change
         t_update = time.time() - base_time_ecg - monitor_delay
         ax_wECG.set_xlim(t_update - w_size, t_update)
         t_update = time.time() - base_time_ppg - monitor_delay
         ax_wPPG.set_xlim(t_update - w_size, t_update)
         ax_wABP.set_xlim(t_update - w_size, t_update)
-        plt.draw()
-        plt.pause(0.001)
-        print((base_time_ecg,base_time_ppg))
-        print(t_ecg[-1],t_pleth[-1])
-        execution_time = time.time() - t_pre
-        t_pre = time.time()
 
-        if execution_time == 0: # avoid zero division exception
-            execution_time = 0.01
-
+        # Ylim change
         ax_wECG.set_ylim(range_of['ecg'])
-
         # if ~check_none(s_pleth):
         #     min_ppg_wave, max_ppg_wave = min(s_pleth), max(s_pleth)
         #     gap_ppg_wave = max_ppg_wave - min_ppg_wave
@@ -801,6 +788,22 @@ def update_plot(q_wave,q_ABPoutput):
         #     ax_wPPG.set_ylim(range_of['pleth'])
         ax_wPPG.set_ylim(range_of['pleth'])
         # ax_wPPG.set_xlim(t_pleth.min(), t_pleth.max())
+
+        # FPS calcuration
+        execution_time = time.time() - t_pre
+        t_pre = time.time()
+        if execution_time == 0: # avoid zero division exception
+            execution_time = 0.01
+        txt_FPS.set_text("{0:.0f} fps".format(1/execution_time))
+
+        # figure update
+        plt.draw()
+        plt.pause(0.001)
+
+
+
+
+
 
 def find_first_greater(arr, target):
     # bisect_right는 target보다 큰 첫 번째 요소의 인덱스를 반환합니다.
