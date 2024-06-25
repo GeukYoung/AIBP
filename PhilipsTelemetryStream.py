@@ -27,15 +27,14 @@ from TelemetryStream import attach_loggers
 from QualityOfSignal import QualityOfSignal as QoS
 from collections import deque
 import multiprocessing as mp
-import matplotlib.pyplot as plt
-import matplotlib as mpl
 import numpy as np
 import bisect
-from matplotlib.animation import FuncAnimation
+import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from scipy import signal
 from scipy.signal import butter, filtfilt
+from functools import partial
 import tensorflow as tf
 import serial
 import easydict
@@ -640,7 +639,7 @@ def update_plot(q_wave,q_ABPoutput):
     fig = plt.figure(figsize=(18,8))
     fig.subplots_adjust(wspace=margin_wspace, hspace=margin_hspace, top=margin_top, bottom=margin_bottom, left=margin_left, right = margin_right)
     gs = plt.GridSpec(nrows=3, ncols=5)
-    
+
     ## plot
     # ECG Wave
     ax_wECG = fig.add_subplot(gs[0,0:4])
@@ -652,7 +651,8 @@ def update_plot(q_wave,q_ABPoutput):
     for spine in ax_wECG.spines.values():
         spine.set_visible(False)
     line_ecg, = ax_wECG.plot([], [], color=colors[0], linewidth=2)
-    
+    ax_wECG.set_ylim(range_of['ecg'])
+
     # PPG Wave
     ax_wPPG = fig.add_subplot(gs[1,0:4])
     ax_wPPG.set_title("Pleth", loc='left', fontweight='bold', color=colors[1], fontsize= fontsize_default * fontsize_title)
@@ -663,7 +663,8 @@ def update_plot(q_wave,q_ABPoutput):
     for spine in ax_wPPG.spines.values():
         spine.set_visible(False)
     line_pleth, = ax_wPPG.plot([],[], color=colors[1], linewidth=2)
-    
+    ax_wPPG.set_ylim(range_of['pleth'])
+
     # ABP Wave
     ax_wABP = fig.add_subplot(gs[2,0:4])
     ax_wABP.set_title("ABP", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title)
@@ -707,6 +708,21 @@ def update_plot(q_wave,q_ABPoutput):
     plt.draw()
     print("!plot init done")
     
+    def on_click(event, fig, axes):
+        if event.inaxes in axes:
+            ratio_gap = 0.2
+            ax = event.inaxes
+            lines = ax.get_lines()
+            if lines:
+                ydata = np.concatenate([line.get_ydata() for line in lines])
+                ymin, ymax = np.min(ydata), np.max(ydata)
+                gap = ymax - ymin
+                ax.set_ylim([ymin - ratio_gap*gap, ymax + ratio_gap*gap])
+                fig.canvas.draw()
+
+    # 그래프 클릭 이벤트 연결
+    fig.canvas.mpl_connect('button_press_event', partial(on_click, fig=fig, axes=[ax_wECG, ax_wPPG, ax_wABP]))
+    
     # buff_tECG = deque([0]*1792, maxlen=1792)
     # buff_ECG = deque([None]*1792, maxlen=1792)
     # buff_tPPG = deque([0]*1024, maxlen=1024)
@@ -725,8 +741,10 @@ def update_plot(q_wave,q_ABPoutput):
     t_pre, execution_time = 0, 0.01 # for fps calcurate
     monitor_delay = 2 # 2s delay buff
     w_size = 5 # 5s dysplay window
+    abplim_first = 1
 
-    while True:    
+    while True:
+        ## ECG & PPG data receive 
         try:
             t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0) # waiting for queue data
             buff_tdelta_ecg.append(time.time() - t_ecg[-1])
@@ -746,14 +764,16 @@ def update_plot(q_wave,q_ABPoutput):
         except:
             i = 1
 
+        ## ABP data receive
         try:
             predict_abp, wave_tPPG, abp_wave = q_ABPoutput.get(timeout=0)
-            min_abp_wave, max_abp_wave = min(abp_wave), max(abp_wave)
-            gap_abp_wave = max_abp_wave - min_abp_wave
-            axis_max_abp_wave = max_abp_wave + 0.1*gap_abp_wave
-            axis_min_abp_wave = min_abp_wave - 0.1*gap_abp_wave
-            ax_wABP.set_ylim((axis_min_abp_wave, axis_max_abp_wave))
-            
+            if abplim_first:
+                min_abp_wave, max_abp_wave = min(abp_wave), max(abp_wave)
+                gap_abp_wave = max_abp_wave - min_abp_wave
+                axis_max_abp_wave = max_abp_wave + 0.1*gap_abp_wave
+                axis_min_abp_wave = min_abp_wave - 0.1*gap_abp_wave
+                ax_wABP.set_ylim((axis_min_abp_wave, axis_max_abp_wave))
+                abplim_first = 0
             line_abp.set_data(wave_tPPG,abp_wave)
             txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1])+"/"+"{0:.0f}".format(predict_abp[0]))
             txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
@@ -770,7 +790,9 @@ def update_plot(q_wave,q_ABPoutput):
         ax_wABP.set_xlim(t_update - w_size, t_update)
 
         # Ylim change
-        ax_wECG.set_ylim(range_of['ecg'])
+        # ax_wECG.set_ylim(range_of['ecg'])
+        # ax_wPPG.set_ylim(range_of['pleth'])
+
         # if ~check_none(s_pleth):
         #     min_ppg_wave, max_ppg_wave = min(s_pleth), max(s_pleth)
         #     gap_ppg_wave = max_ppg_wave - min_ppg_wave
@@ -782,7 +804,7 @@ def update_plot(q_wave,q_ABPoutput):
         #     print(s_pleth)
         # else:
         #     ax_wPPG.set_ylim(range_of['pleth'])
-        ax_wPPG.set_ylim(range_of['pleth'])
+        
         # ax_wPPG.set_xlim(t_pleth.min(), t_pleth.max())
         
         # FPS calcuration
