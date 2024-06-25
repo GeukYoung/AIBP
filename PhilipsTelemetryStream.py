@@ -639,7 +639,6 @@ def update_plot(q_wave,q_ABPoutput):
 
     fig = plt.figure(figsize=(18,8))
     fig.subplots_adjust(wspace=margin_wspace, hspace=margin_hspace, top=margin_top, bottom=margin_bottom, left=margin_left, right = margin_right)
-    
     gs = plt.GridSpec(nrows=3, ncols=5)
     
     ## plot
@@ -699,8 +698,8 @@ def update_plot(q_wave,q_ABPoutput):
     txt_MAP = ax_nBP.text(margin_left_numeric - 0.04, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
     # txt_MAP = ax_nBP.text(margin_left_numeric-0.05, 0.5, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*10) # for fps display
     ax_nBP.axis('off')
-    # art_icon2 = AnnotationBbox(imagebox, (0, 1.07), xycoords='axes fraction', frameon=False, box_alignment=(-0.45, 0))
-    # ax_nBP.add_artist(art_icon2)
+    art_icon2 = AnnotationBbox(imagebox, (-0.2, 1.01), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
+    ax_nBP.add_artist(art_icon2)
 
     # FPS
     txt_FPS = ax_nBP.text(1.01, 3.6, "-/-", ha='right', va='center', color=colors[0], fontsize=fontsize_default*fontsize_numeric_BP*0.5)
@@ -726,20 +725,17 @@ def update_plot(q_wave,q_ABPoutput):
     t_pre, execution_time = 0, 0.01 # for fps calcurate
     monitor_delay = 2 # 2s delay buff
     w_size = 5 # 5s dysplay window
-    while True:
+
+    while True:    
         try:
             t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0) # waiting for queue data
-            if 1:
-                # print("!! adjust delay time")
-                buff_tdelta_ecg.append(time.time() - t_ecg[-1])
-                buff_base_time_ecg.append(min(buff_tdelta_ecg))
-                base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
+            buff_tdelta_ecg.append(time.time() - t_ecg[-1])
+            buff_base_time_ecg.append(min(buff_tdelta_ecg))
+            base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
 
-                buff_tdelta_ppg.append(time.time() - t_pleth[-1])
-                buff_base_time_ppg.append(min(buff_tdelta_ppg))
-                base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
-                # delay_ecgppg = t_pleth[-1] - t_ecg[-1]
-                # print([time.time(), t_ecg[-1], base_time, t_ecg_last])
+            buff_tdelta_ppg.append(time.time() - t_pleth[-1])
+            buff_base_time_ppg.append(min(buff_tdelta_ppg))
+            base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
 
             if HR and SPO2:
                 txt_HR.set_text("{0:.0f}".format(HR))
@@ -749,7 +745,7 @@ def update_plot(q_wave,q_ABPoutput):
             line_pleth.set_data(t_pleth,s_pleth)
         except:
             i = 1
-        
+
         try:
             predict_abp, wave_tPPG, abp_wave = q_ABPoutput.get(timeout=0)
             min_abp_wave, max_abp_wave = min(abp_wave), max(abp_wave)
@@ -765,7 +761,7 @@ def update_plot(q_wave,q_ABPoutput):
             # txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
         except:
             i = 1
-        
+
         # Xlim change
         t_update = time.time() - base_time_ecg - monitor_delay
         ax_wECG.set_xlim(t_update - w_size, t_update)
@@ -788,7 +784,7 @@ def update_plot(q_wave,q_ABPoutput):
         #     ax_wPPG.set_ylim(range_of['pleth'])
         ax_wPPG.set_ylim(range_of['pleth'])
         # ax_wPPG.set_xlim(t_pleth.min(), t_pleth.max())
-
+        
         # FPS calcuration
         execution_time = time.time() - t_pre
         t_pre = time.time()
@@ -799,10 +795,6 @@ def update_plot(q_wave,q_ABPoutput):
         # figure update
         plt.draw()
         plt.pause(0.001)
-
-
-
-
 
 
 def find_first_greater(arr, target):
@@ -991,6 +983,7 @@ if __name__ == '__main__':
         
         redraw_interval = 0.1
         last_poll = time.time()
+        last_putdata = time.time()
         # last_redraw = time.time()
         tstream.open()
         
@@ -1016,8 +1009,10 @@ if __name__ == '__main__':
                                 if idx_update >= 0:
                                     buff_tPPG.extend(PPG.t[idx_update:])
                                     buff_PPG.extend(PPG.y[idx_update:])
-                                q_wave.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, HR, SPO2))
-                                q_ABPinput.put((buff_tPPG, buff_PPG))
+                                if time.time() - last_putdata > 0.8:
+                                    q_wave.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, HR, SPO2))
+                                    q_ABPinput.put((buff_tPPG, buff_PPG))
+                                    last_putdata = time.time()
                         # q_ABPoutput.put((data.get('Heart Rate'), data.get('SpO2')))
                         
                         #self.display.update_data(data, tstream.sampled_data)
