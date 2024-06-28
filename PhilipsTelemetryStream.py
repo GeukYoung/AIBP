@@ -620,22 +620,22 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     elif type_system == 2: # for surface
         fontsize_default = 6
         fontsize_title = 4
-        fontsize_numeric = 12
-        fontsize_numeric_BP = 8
+        fontsize_numeric = 12.5
+        fontsize_numeric_BP = 9
         margin_left_numtitle = -0.2
         margin_top_numtitle = 1.09
-        margin_left_numeric = 0.2
+        margin_left_numeric = 0.45
         margin_wspace, margin_hspace = 0.35, 0.25
         margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
         icon_zoom = 0.04
     elif type_system == 3: # for window
         fontsize_default = 6
         fontsize_title = 4
-        fontsize_numeric = 12
-        fontsize_numeric_BP = 10
+        fontsize_numeric = 12.5
+        fontsize_numeric_BP = 11
         margin_left_numtitle = -0.2
         margin_top_numtitle = 1.09
-        margin_left_numeric = 0.2
+        margin_left_numeric = 0.45
         margin_wspace, margin_hspace = 0.35, 0.25
         margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
         icon_zoom = 0.04
@@ -681,7 +681,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     # ABP Wave
     ax_wABP = fig.add_subplot(gs[2, 0:4])
     ax_wABP.set_title("ABP", loc='left', fontweight='bold', color=colors[2], fontsize=fontsize_default * fontsize_title)
-    art_icon1 = AnnotationBbox(imagebox, (0.0001, 1.01), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
+    art_icon1 = AnnotationBbox(imagebox, (0.0001, 1.03), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
     ax_wABP.add_artist(art_icon1)
     ax_wABP.set_xticklabels([])
     ax_wABP.set_yticklabels([])
@@ -694,25 +694,25 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     # HR Value Display
     ax_nECG = fig.add_subplot(gs[0, 4])
     ax_nECG.text(margin_left_numtitle, margin_top_numtitle, "HR", ha='left', va='center', color=colors[0], fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_HR = ax_nECG.text(margin_left_numeric, 0.5, "75", ha='left', va='center', color=colors[0], fontsize=fontsize_default * fontsize_numeric)
+    txt_HR = ax_nECG.text(margin_left_numeric, 0.58, "75", ha='center', va='center', color=colors[0], fontsize=fontsize_default * fontsize_numeric)
     ax_nECG.axis('off')
 
     # SpO2 and BP Text Display
     ax_nPPG = fig.add_subplot(gs[1, 4])
     ax_nPPG.text(margin_left_numtitle, margin_top_numtitle, "SpO2", ha='left', va='center', color=colors[1], fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_SPO2 = ax_nPPG.text(margin_left_numeric, 0.5, "100", ha='left', va='center', color=colors[1], fontsize=fontsize_default * fontsize_numeric)
+    txt_SPO2 = ax_nPPG.text(margin_left_numeric, 0.58, "100", ha='center', va='center', color=colors[1], fontsize=fontsize_default * fontsize_numeric)
     ax_nPPG.axis('off')
 
     ax_nBP = fig.add_subplot(gs[2, 4])
     ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "ABP", ha='left', va='center', color=colors[2], fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_SBPDBP = ax_nBP.text(margin_left_numeric - 0.25, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default * fontsize_numeric_BP)
-    txt_MAP = ax_nBP.text(margin_left_numeric - 0.04, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default * fontsize_numeric_BP)
+    txt_SBPDBP = ax_nBP.text(margin_left_numeric + 0.05, 0.75, "- / -", ha='center', va='center', color=colors[2], fontsize=fontsize_default * fontsize_numeric_BP)
+    txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.35, "(-)", ha='center', va='center', color=colors[2], fontsize=fontsize_default * fontsize_numeric_BP)
     ax_nBP.axis('off')
-    art_icon2 = AnnotationBbox(imagebox, (-0.2, 1.01), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
+    art_icon2 = AnnotationBbox(imagebox, (-0.2, 1.06), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
     ax_nBP.add_artist(art_icon2)
 
     # FPS
-    txt_FPS = ax_nBP.text(1.01, 3.6, "-/-", ha='right', va='center', color='white', fontsize=fontsize_default * fontsize_numeric_BP * 0.2)
+    txt_FPS = ax_nBP.text(1.15, 3.7, "-/-", ha='right', va='center', color='white', fontsize=fontsize_default * fontsize_numeric_BP * 0.2)
 
     def on_click(event, fig, axes):
         if event.inaxes in axes:
