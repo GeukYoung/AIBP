@@ -29,6 +29,13 @@ from collections import deque
 import multiprocessing as mp
 import numpy as np
 import bisect
+import tkinter as tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+from tkinter import Toplevel
+
+
+# import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
@@ -592,9 +599,14 @@ class PhilipsTelemetryStream(TelemetryStream):
             return ret
 
 def update_plot(q_wave, q_ABPoutput, stop_event):
-    # mpl.rcParams['path.simplify'] = True
-    # mpl.rcParams['path.simplify_threshold'] = 1.0
-    
+    def create_main_window():
+        root = Toplevel()
+        root.attributes('-fullscreen', True)  # 창을 전체 화면으로 설정
+        root.attributes('-topmost', True)     # 창을 항상 위에 위치하도록 설정
+        root.overrideredirect(True)           # 타이틀 바 제거
+        return root
+
+    root = create_main_window()
     type_system = 2
     
     if type_system == 1: # for linux
@@ -627,24 +639,24 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         margin_wspace, margin_hspace = 0.35, 0.25
         margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
         icon_zoom = 0.04
-    
+
     image_path = 'AI_logo.png'  # 여기에 아이콘 이미지 경로를 입력하세요.
     icon_AI = mpimg.imread(image_path)
     imagebox = OffsetImage(icon_AI, zoom=icon_zoom)
     
     plt.style.use('dark_background')
     
-    range_of = {'pleth': (0,5000),'ecg': (-1.5, 2),'abp': (40, 140)}
+    range_of = {'pleth': (0, 5000), 'ecg': (-1.5, 2), 'abp': (40, 140)}
     colors = ['lime', 'cyan', 'red']
 
-    fig = plt.figure(figsize=(18,8))
-    fig.subplots_adjust(wspace=margin_wspace, hspace=margin_hspace, top=margin_top, bottom=margin_bottom, left=margin_left, right = margin_right)
-    gs = plt.GridSpec(nrows=3, ncols=5)
+    fig = plt.Figure(figsize=(18, 8))
+    fig.subplots_adjust(wspace=margin_wspace, hspace=margin_hspace, top=margin_top, bottom=margin_bottom, left=margin_left, right=margin_right)
+    gs = fig.add_gridspec(nrows=3, ncols=5)
 
     ## plot
     # ECG Wave
-    ax_wECG = fig.add_subplot(gs[0,0:4])
-    ax_wECG.set_title("ECG", loc='left', fontweight='bold', color=colors[0], fontsize= fontsize_default * fontsize_title)
+    ax_wECG = fig.add_subplot(gs[0, 0:4])
+    ax_wECG.set_title("ECG", loc='left', fontweight='bold', color=colors[0], fontsize=fontsize_default * fontsize_title)
     ax_wECG.set_xticklabels([])
     ax_wECG.set_yticklabels([])
     ax_wECG.tick_params(axis='both', which='both', length=0)
@@ -655,60 +667,53 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     ax_wECG.set_ylim(range_of['ecg'])
 
     # PPG Wave
-    ax_wPPG = fig.add_subplot(gs[1,0:4])
-    ax_wPPG.set_title("Pleth", loc='left', fontweight='bold', color=colors[1], fontsize= fontsize_default * fontsize_title)
+    ax_wPPG = fig.add_subplot(gs[1, 0:4])
+    ax_wPPG.set_title("Pleth", loc='left', fontweight='bold', color=colors[1], fontsize=fontsize_default * fontsize_title)
     ax_wPPG.set_xticklabels([])
     ax_wPPG.set_yticklabels([])
     ax_wPPG.tick_params(axis='both', which='both', length=0)
     ax_wPPG.grid(axis='y', color=colors[1], linestyle='--', linewidth=0.5)
     for spine in ax_wPPG.spines.values():
         spine.set_visible(False)
-    line_pleth, = ax_wPPG.plot([],[], color=colors[1], linewidth=2)
+    line_pleth, = ax_wPPG.plot([], [], color=colors[1], linewidth=2)
     ax_wPPG.set_ylim(range_of['pleth'])
 
     # ABP Wave
-    ax_wABP = fig.add_subplot(gs[2,0:4])
-    ax_wABP.set_title("ABP", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title)
+    ax_wABP = fig.add_subplot(gs[2, 0:4])
+    ax_wABP.set_title("ABP", loc='left', fontweight='bold', color=colors[2], fontsize=fontsize_default * fontsize_title)
     art_icon1 = AnnotationBbox(imagebox, (0.0001, 1.01), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
     ax_wABP.add_artist(art_icon1)
-    # ax_wABP.set_title("raw ECG", loc='left', fontweight='bold', color=colors[2], fontsize= fontsize_default * fontsize_title) # for test
     ax_wABP.set_xticklabels([])
     ax_wABP.set_yticklabels([])
     ax_wABP.tick_params(axis='both', which='both', length=0)
-    # ax_wABP.grid(axis='y', color=colors[2], linestyle='--', linewidth=0.5)
     for spine in ax_wABP.spines.values():
         spine.set_visible(False)
-    line_abp, = ax_wABP.plot([],[], color=colors[2], linewidth=2)
-    
+    line_abp, = ax_wABP.plot([], [], color=colors[2], linewidth=2)
+
     ## text
     # HR Value Display
     ax_nECG = fig.add_subplot(gs[0, 4])
-    ax_nECG.text(margin_left_numtitle, margin_top_numtitle, "HR", ha='left', va='center', color=colors[0], fontsize=fontsize_default*fontsize_title, fontweight='bold')
-    txt_HR = ax_nECG.text(margin_left_numeric, 0.5, "75", ha='left', va='center', color=colors[0], fontsize=fontsize_default*fontsize_numeric)
+    ax_nECG.text(margin_left_numtitle, margin_top_numtitle, "HR", ha='left', va='center', color=colors[0], fontsize=fontsize_default * fontsize_title, fontweight='bold')
+    txt_HR = ax_nECG.text(margin_left_numeric, 0.5, "75", ha='left', va='center', color=colors[0], fontsize=fontsize_default * fontsize_numeric)
     ax_nECG.axis('off')
 
     # SpO2 and BP Text Display
     ax_nPPG = fig.add_subplot(gs[1, 4])
-    ax_nPPG.text(margin_left_numtitle, margin_top_numtitle, "SpO2", ha='left', va='center', color=colors[1], fontsize=fontsize_default*fontsize_title, fontweight='bold')
-    txt_SPO2 = ax_nPPG.text(margin_left_numeric, 0.5, "100", ha='left', va='center', color=colors[1], fontsize=fontsize_default*fontsize_numeric)
+    ax_nPPG.text(margin_left_numtitle, margin_top_numtitle, "SpO2", ha='left', va='center', color=colors[1], fontsize=fontsize_default * fontsize_title, fontweight='bold')
+    txt_SPO2 = ax_nPPG.text(margin_left_numeric, 0.5, "100", ha='left', va='center', color=colors[1], fontsize=fontsize_default * fontsize_numeric)
     ax_nPPG.axis('off')
 
     ax_nBP = fig.add_subplot(gs[2, 4])
-    ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "ABP", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold')
-    # ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "FPS", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_title, fontweight='bold') # for fps display
-    txt_SBPDBP = ax_nBP.text(margin_left_numeric - 0.25, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
-    txt_MAP = ax_nBP.text(margin_left_numeric - 0.04, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
-    # txt_MAP = ax_nBP.text(margin_left_numeric-0.05, 0.5, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*10) # for fps display
+    ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "ABP", ha='left', va='center', color=colors[2], fontsize=fontsize_default * fontsize_title, fontweight='bold')
+    txt_SBPDBP = ax_nBP.text(margin_left_numeric - 0.25, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default * fontsize_numeric_BP)
+    txt_MAP = ax_nBP.text(margin_left_numeric - 0.04, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default * fontsize_numeric_BP)
     ax_nBP.axis('off')
     art_icon2 = AnnotationBbox(imagebox, (-0.2, 1.01), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
     ax_nBP.add_artist(art_icon2)
 
     # FPS
-    txt_FPS = ax_nBP.text(1.01, 3.6, "-/-", ha='right', va='center', color=colors[0], fontsize=fontsize_default*fontsize_numeric_BP*0.5)
+    txt_FPS = ax_nBP.text(1.01, 3.6, "-/-", ha='right', va='center', color='white', fontsize=fontsize_default * fontsize_numeric_BP * 0.2)
 
-    plt.draw()
-    print("!plot init done")
-    
     def on_click(event, fig, axes):
         if event.inaxes in axes:
             ratio_gap = 0.2
@@ -718,23 +723,19 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
                 ydata = np.concatenate([line.get_ydata() for line in lines])
                 ymin, ymax = np.min(ydata), np.max(ydata)
                 gap = ymax - ymin
-                ax.set_ylim([ymin - ratio_gap*gap, ymax + ratio_gap*gap])
+                ax.set_ylim([ymin - ratio_gap * gap, ymax + ratio_gap * gap])
                 fig.canvas.draw()
 
     def on_close(event):
         print("Figure closed.")
         stop_event.set()
 
-    # 그래프 클릭 이벤트 연결
     fig.canvas.mpl_connect('button_press_event', partial(on_click, fig=fig, axes=[ax_wECG, ax_wPPG, ax_wABP]))
-    
-    # figure 창 닫힘 이벤트 연결
     fig.canvas.mpl_connect('close_event', on_close)
 
-    # buff_tECG = deque([0]*1792, maxlen=1792)
-    # buff_ECG = deque([None]*1792, maxlen=1792)
-    # buff_tPPG = deque([0]*1024, maxlen=1024)
-    # buff_PPG = deque([None]*1024, maxlen=1024)
+    canvas = FigureCanvasTkAgg(fig, master=root)
+    canvas.draw()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
     ## realtime update
     buff_tdelta_ecg = deque(maxlen=8) # for timediff stacking
@@ -745,16 +746,13 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     
     base_time_ecg = time.time()
     base_time_ppg = time.time()
-    delay_ecgppg = 0
-    t_pre, execution_time = 0, 0.01 # for fps calcurate
-    monitor_delay = 2 # 2s delay buff
-    w_size = 5 # 5s dysplay window
+    t_pre = time.time()
     abplim_first = 1
 
     while not stop_event.is_set():
-        ## ECG & PPG data receive 
         try:
-            t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0) # waiting for queue data
+            t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0)
+
             buff_tdelta_ecg.append(time.time() - t_ecg[-1])
             buff_base_time_ecg.append(min(buff_tdelta_ecg))
             base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
@@ -763,68 +761,48 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
             buff_base_time_ppg.append(min(buff_tdelta_ppg))
             base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
 
+            line_ecg.set_data(t_ecg, s_ecg)
+            line_pleth.set_data(t_pleth, s_pleth)
+
             if HR and SPO2:
                 txt_HR.set_text("{0:.0f}".format(HR))
                 txt_SPO2.set_text("{0:.0f}".format(SPO2))
-            
-            line_ecg.set_data(t_ecg,s_ecg)
-            line_pleth.set_data(t_pleth,s_pleth)
-        except:
-            i = 1
 
-        ## ABP data receive
+        except:
+            pass
+
         try:
             predict_abp, wave_tPPG, abp_wave = q_ABPoutput.get(timeout=0)
             if abplim_first:
                 min_abp_wave, max_abp_wave = min(abp_wave), max(abp_wave)
                 gap_abp_wave = max_abp_wave - min_abp_wave
-                axis_max_abp_wave = max_abp_wave + 0.1*gap_abp_wave
-                axis_min_abp_wave = min_abp_wave - 0.1*gap_abp_wave
+                axis_max_abp_wave = max_abp_wave + 0.1 * gap_abp_wave
+                axis_min_abp_wave = min_abp_wave - 0.1 * gap_abp_wave
                 ax_wABP.set_ylim((axis_min_abp_wave, axis_max_abp_wave))
                 abplim_first = 0
-            line_abp.set_data(wave_tPPG,abp_wave)
-            txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1])+"/"+"{0:.0f}".format(predict_abp[0]))
+            line_abp.set_data(wave_tPPG, abp_wave)
+            txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1]) + "/" + "{0:.0f}".format(predict_abp[0]))
             txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
-            # txt_SBPDBP = ax_nBP.text(margin_left_numeric, 0.75, "-/-", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
-            # txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.25, "(-)", ha='left', va='center', color=colors[2], fontsize=fontsize_default*fontsize_numeric_BP)
         except:
-            i = 1
+            pass
 
-        # Xlim change
-        t_update = time.time() - base_time_ecg - monitor_delay
-        ax_wECG.set_xlim(t_update - w_size, t_update)
-        t_update = time.time() - base_time_ppg - monitor_delay
-        ax_wPPG.set_xlim(t_update - w_size, t_update)
-        ax_wABP.set_xlim(t_update - w_size, t_update)
+        t_update = time.time() - base_time_ecg - 2
+        ax_wECG.set_xlim(t_update - 5, t_update)
+        t_update = time.time() - base_time_ppg - 2
+        ax_wPPG.set_xlim(t_update - 5, t_update)
+        ax_wABP.set_xlim(t_update - 5, t_update)
 
-        # Ylim change
-        # ax_wECG.set_ylim(range_of['ecg'])
-        # ax_wPPG.set_ylim(range_of['pleth'])
-
-        # if ~check_none(s_pleth):
-        #     min_ppg_wave, max_ppg_wave = min(s_pleth), max(s_pleth)
-        #     gap_ppg_wave = max_ppg_wave - min_ppg_wave
-        #     axis_max_ppg_wave = max_ppg_wave + 0.1*gap_ppg_wave
-        #     axis_min_ppg_wave = min_ppg_wave - 0.1*gap_ppg_wave
-        #     ax_wPPG.set_ylim((axis_min_ppg_wave, axis_max_ppg_wave))
-        #     print("!ppg data:")
-        #     print((axis_min_ppg_wave, axis_max_ppg_wave))
-        #     print(s_pleth)
-        # else:
-        #     ax_wPPG.set_ylim(range_of['pleth'])
-        
-        # ax_wPPG.set_xlim(t_pleth.min(), t_pleth.max())
-        
-        # FPS calcuration
         execution_time = time.time() - t_pre
         t_pre = time.time()
-        if execution_time == 0: # avoid zero division exception
+        if execution_time == 0:
             execution_time = 0.01
-        txt_FPS.set_text("{0:.0f} fps".format(1/execution_time))
+        txt_FPS.set_text("{0:.0f} fps".format(1 / execution_time))
 
-        # figure update
-        plt.draw()
-        plt.pause(0.001)
+        fig.canvas.draw()
+        root.update_idletasks()
+        root.update()
+
+    root.mainloop()
 
 
 def find_first_greater(arr, target):
