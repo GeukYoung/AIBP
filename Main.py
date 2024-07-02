@@ -1,17 +1,7 @@
 """
-@author: uagrawal last update: 2/29/16
-@fixes: backport to 2.7 by derek
+@author: SNUBH: 02/07/2024
 
-Requires pyserial (for RS232)
 """
-
-# @leo/@uday/@derek
-# TODO: How do we want to smooth the QoS values?
-
-# Approaches to stability problems:
-# TODO: log rotation, keep smaller files?
-# TODO: Set priority to high/rt and see if it crashes?
-# TODO: Turn the QoS function off and test?
 
 from __future__ import unicode_literals
 
@@ -46,8 +36,8 @@ args = easydict.EasyDict({
     "gui": "SimpleStripchart",
 })
 
-__description__ = "PERSEUS telemetry stream listener for Philips Invellivue devices with serial connections"
-__version_info__ = ('0', '7', '3')
+__description__ = "AIBP"
+__version_info__ = ('0', '0', '1')
 __version__ = '.'.join(__version_info__)
 
 # updated 0.7.3 accounts for 8000Hz data collection throughout
