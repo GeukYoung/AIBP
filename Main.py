@@ -732,10 +732,29 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         print("Figure closed.")
         stop_event.set()
 
+    # 텍스트 클릭 이벤트를 처리하는 함수
+    global click_count, last_click_time
+    click_count = 0
+    last_click_time = time.time()
+    def check_clicks_and_close(event, fig, axes):
+        global click_count, last_click_time
+        current_time = time.time()
+        print('click event occur')
+        print(click_count)
+        if current_time - last_click_time <= 1:
+            click_count += 1
+        else:
+            click_count = 1  # 시간이 경과하면 클릭 횟수 초기화
+            last_click_time = current_time
+
+        if click_count >= 5:
+            stop_event.set()
+            fig.canvas.get_tk_widget().master.destroy()
+                
     fig.canvas.mpl_connect('button_press_event', partial(on_click_zoom, fig=fig, axes=[ax_wECG, ax_wPPG, ax_wABP]))
     fig.canvas.mpl_connect('button_press_event', partial(toggle_fps, txt=txt_FPS, fig=fig))
-
     fig.canvas.mpl_connect('close_event', on_close)
+    fig.canvas.mpl_connect('button_press_event', partial(check_clicks_and_close, fig=fig, axes=ax_nECG))
 
     canvas = FigureCanvasTkAgg(fig, master=root)
     canvas.draw()
