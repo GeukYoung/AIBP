@@ -22,22 +22,18 @@ from IntellivueProtocol.IntellivueDecoder import IntellivueDecoder
 from IntellivueProtocol.RS232 import RS232
 from IntellivueProtocol.IntellivueDistiller import IntellivueDistiller
 from TelemetryStream import TelemetryStream
-from TelemetryStream import TelemetryGUI
-from TelemetryStream import attach_loggers
+# from TelemetryStream import attach_loggers
 from QualityOfSignal import QualityOfSignal as QoS
 from collections import deque
 import multiprocessing as mp
 import numpy as np
 import bisect
 import tkinter as tk
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-
 from tkinter import Toplevel
-
-
 # import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from scipy import signal
 from scipy.signal import butter, filtfilt
@@ -959,7 +955,6 @@ if __name__ == '__main__':
 
     # Attach any post-processing functions
     tstream.add_update_func(qos)
-    attach_loggers(tstream, opts)
 
     if 0: # not opts.gui
 
@@ -974,7 +969,6 @@ if __name__ == '__main__':
         # global abp_model, wave_model
         # abp_model = tf.keras.models.load_model('ABP_model_tf')
         # wave_model = tf.keras.models.load_model('wave_model_tf')
-        print("!!!!!!!!!!!!! tf import done")
     
         buff_tPPG = deque([0]*1024, maxlen=1024)
         buff_PPG = deque([None]*1024, maxlen=1024)
