@@ -710,7 +710,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     # FPS
     txt_FPS = ax_nBP.text(1.15, 3.7, "-/-", ha='right', va='center', color='white', fontsize=fontsize_default * fontsize_numeric_BP * 0.2)
 
-    def on_click(event, fig, axes):
+    def on_click_zoom(event, fig, axes):
         if event.inaxes in axes:
             ratio_gap = 0.2
             ax = event.inaxes
@@ -720,13 +720,21 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
                 ymin, ymax = np.min(ydata), np.max(ydata)
                 gap = ymax - ymin
                 ax.set_ylim([ymin - ratio_gap * gap, ymax + ratio_gap * gap])
-                fig.canvas.draw()
+
+    def toggle_fps(event, txt, fig):
+        bbox = txt.get_window_extent(fig.canvas.get_renderer())
+        if bbox.contains(event.x, event.y):
+            current_color = txt.get_color()
+            new_color = 'black' if current_color == 'white' else 'white'
+            txt.set_color(new_color)
 
     def on_close(event):
         print("Figure closed.")
         stop_event.set()
 
-    fig.canvas.mpl_connect('button_press_event', partial(on_click, fig=fig, axes=[ax_wECG, ax_wPPG, ax_wABP]))
+    fig.canvas.mpl_connect('button_press_event', partial(on_click_zoom, fig=fig, axes=[ax_wECG, ax_wPPG, ax_wABP]))
+    fig.canvas.mpl_connect('button_press_event', partial(toggle_fps, txt=txt_FPS, fig=fig))
+
     fig.canvas.mpl_connect('close_event', on_close)
 
     canvas = FigureCanvasTkAgg(fig, master=root)
