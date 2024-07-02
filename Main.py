@@ -680,13 +680,13 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     # HR Value Display
     ax_nECG = fig.add_subplot(gs[0, 4])
     ax_nECG.text(margin_left_numtitle, margin_top_numtitle, "HR", ha='left', va='center', color=colors[0], fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_HR = ax_nECG.text(margin_left_numeric, 0.58, "75", ha='center', va='center', color=colors[0], fontsize=fontsize_default * fontsize_numeric)
+    txt_HR = ax_nECG.text(margin_left_numeric, 0.58, "-", ha='center', va='center', color=colors[0], fontsize=fontsize_default * fontsize_numeric)
     ax_nECG.axis('off')
 
     # SpO2 and BP Text Display
     ax_nPPG = fig.add_subplot(gs[1, 4])
     ax_nPPG.text(margin_left_numtitle, margin_top_numtitle, "SpO2", ha='left', va='center', color=colors[1], fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_SPO2 = ax_nPPG.text(margin_left_numeric, 0.58, "100", ha='center', va='center', color=colors[1], fontsize=fontsize_default * fontsize_numeric)
+    txt_SPO2 = ax_nPPG.text(margin_left_numeric, 0.58, "-", ha='center', va='center', color=colors[1], fontsize=fontsize_default * fontsize_numeric)
     ax_nPPG.axis('off')
 
     ax_nBP = fig.add_subplot(gs[2, 4])
@@ -719,7 +719,6 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
             txt.set_color(new_color)
 
     def on_close(event):
-        print("Figure closed.")
         stop_event.set()
 
     # 텍스트 클릭 이벤트를 처리하는 함수
@@ -729,8 +728,6 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     def check_clicks_and_close(event, fig, axes):
         global click_count, last_click_time
         current_time = time.time()
-        print('click event occur')
-        print(click_count)
         if current_time - last_click_time <= 1:
             click_count += 1
         else:
@@ -777,9 +774,8 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
             line_ecg.set_data(t_ecg, s_ecg)
             line_pleth.set_data(t_pleth, s_pleth)
 
-            if HR and SPO2:
-                txt_HR.set_text("{0:.0f}".format(HR))
-                txt_SPO2.set_text("{0:.0f}".format(SPO2))
+            txt_HR.set_text("{0:.0f}".format(HR))
+            txt_SPO2.set_text("{0:.0f}".format(SPO2))
 
         except:
             pass
@@ -989,7 +985,9 @@ if __name__ == '__main__':
     
         buff_tPPG = deque([0]*1024, maxlen=1024)
         buff_PPG = deque([None]*1024, maxlen=1024)
-        
+        buff_HR = 0
+        buff_SPO2 = 0
+
         stop_event = mp.Event()
         q_wave = mp.Queue()
         q_ABPoutput = mp.Queue()
@@ -1015,8 +1013,11 @@ if __name__ == '__main__':
                     if data:
                         temp = list(tstream.sampled_data.keys())
                         HR = data.get('Heart Rate')
+                        if HR:
+                            buff_HR = HR
                         SPO2 = data.get('SpO2')
-                        
+                        if SPO2:
+                            buff_SPO2 = SPO2
                         if ('ECG' in temp) and ('Pleth' in temp):
                             channel_ECG = tstream.sampled_data.get('ECG')
                             channel_PPG = tstream.sampled_data.get('Pleth')
@@ -1030,7 +1031,7 @@ if __name__ == '__main__':
                                     buff_tPPG.extend(PPG.t[idx_update:])
                                     buff_PPG.extend(PPG.y[idx_update:])
                                 if time.time() - last_putdata > 0.8:
-                                    q_wave.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, HR, SPO2))
+                                    q_wave.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2))
                                     q_ABPinput.put((buff_tPPG, buff_PPG))
                                     last_putdata = time.time()
                         # q_ABPoutput.put((data.get('Heart Rate'), data.get('SpO2')))
