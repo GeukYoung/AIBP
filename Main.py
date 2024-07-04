@@ -368,7 +368,7 @@ class PhilipsTelemetryStream(TelemetryStream):
         # Have to use `print` in here b/c logging may be gone if there is an error shutdown
 
         # If we have already closed or otherwise lost the port, pass and return
-        
+       
         if 0: # self.rs232 is None:
             logging.error('Trying to close a socket that no longer exists')
             raise IOError
@@ -594,7 +594,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
 
     root = create_main_window()
     type_system = 2
-    
+   
     if type_system == 1: # for linux
         fontsize_default = 5
         fontsize_title = 4
@@ -658,13 +658,12 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         margin_wspace, margin_hspace = 0.35, 0.25
         margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
        
-
     image_path = 'AI_logo.png'  # 여기에 아이콘 이미지 경로를 입력하세요.
     icon_AI = mpimg.imread(image_path)
     imagebox = OffsetImage(icon_AI, zoom=icon_zoom)
-    
+   
     plt.style.use('dark_background')
-    
+   
     range_of = {'pleth': (0, 5000), 'ecg': (-1.5, 2), 'abp': (40, 140)}
     colors = ['lime', 'cyan', 'red']
 
@@ -773,7 +772,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         if click_count >= 5:
             stop_event.set()
             fig.canvas.get_tk_widget().master.destroy()
-                
+               
     fig.canvas.mpl_connect('button_press_event', partial(on_click_zoom, fig=fig, axes=[ax_wECG, ax_wPPG, ax_wABP]))
     fig.canvas.mpl_connect('button_press_event', partial(toggle_fps, txt=txt_FPS, fig=fig))
     fig.canvas.mpl_connect('close_event', on_close)
@@ -789,35 +788,16 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
 
     buff_tdelta_ppg = deque(maxlen=8) # for timediff stacking
     buff_base_time_ppg = deque(maxlen=4) # for smoothing
-    
+   
     base_time_ecg = time.time()
     base_time_ppg = time.time()
     t_pre = time.time()
     abplim_first = 1
 
     while not stop_event.is_set():
-        # try:
-            # t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0)
-
-            # buff_tdelta_ecg.append(time.time() - t_ecg[-1])
-            # buff_base_time_ecg.append(min(buff_tdelta_ecg))
-            # base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
-
-            # buff_tdelta_ppg.append(time.time() - t_pleth[-1])
-            # buff_base_time_ppg.append(min(buff_tdelta_ppg))
-            # base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
-
-            # line_ecg.set_data(t_ecg, s_ecg)
-            # line_pleth.set_data(t_pleth, s_pleth)
-
-            # txt_HR.set_text("{0:.0f}".format(HR))
-            # txt_SPO2.set_text("{0:.0f}".format(SPO2))
-
-        # except:
-        #     pass
-
         try:
             t_ecg, s_ecg, t_pleth, s_pleth, s_abp, predict_abp, HR, SPO2 = q_ABPoutput.get(timeout=0)
+
             buff_tdelta_ecg.append(time.time() - t_ecg[-1])
             buff_base_time_ecg.append(min(buff_tdelta_ecg))
             base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
@@ -843,9 +823,6 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
             txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1]) + "/" + "{0:.0f}".format(predict_abp[0]))
             txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
 
-            print("time :")
-            print((t_pleth[0],t_pleth[-1]))
-            print((t_update-5,t_update))
         except:
             pass
 
@@ -866,7 +843,6 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         root.update()
 
     root.mainloop()
-
 
 def find_first_greater(arr, target):
     # bisect_right는 target보다 큰 첫 번째 요소의 인덱스를 반환합니다.
@@ -943,11 +919,11 @@ def apply_low_pass_filter(data, cutoff, sampling_frequency, order=4, padlen=None
 def check_none(arr):
     return np.any([element is None for element in arr])
 
-def esti_ABP(q_ABPinput, q_ABPoutput):
+def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
     # global abp_model, wave_model
     abp_model = tf.keras.models.load_model('ABP_model_tf')
     wave_model = tf.keras.models.load_model('wave_model_tf')
-    
+   
     # DBP/SBP/MAP Normaization
     abp_data_min = 20
     abp_data_max = 200
@@ -961,33 +937,30 @@ def esti_ABP(q_ABPinput, q_ABPoutput):
     while True:
         if not q_ABPinput.empty():
             wave_tECG, wave_ECG, wave_tPPG, wave_PPG, buff_HR, buff_SPO2 = q_ABPinput.get_nowait()
-            
             if ~check_none(wave_PPG):
-                print("get ABP input")
                 predict_result = abp_model.predict(np.reshape(list(wave_PPG), (1, 1024)), verbose=0)
                 predict_result = np.array(predict_result)
                 predict_result = predict_result.reshape(-1)
                 predict_abp  = denormalize_data(predict_result, abp_data_min, abp_data_max, abp_normalized_min, abp_normalized_max)
-                # print(predict_abp)
-        
+       
                 normalized_ppg, min_val, max_val = minmax_normalize(wave_PPG)
                 results = wave_model.predict(np.reshape(normalized_ppg, (1, 1024)), verbose=0)
                 results = np.array(results)
                 predictions = tf.squeeze(results, axis=-1)
                 predict_wave = predictions [0]
                 abp_wave = apply_low_pass_filter(predict_wave, cutoff_high, SAMPLING_RATE)
-                # print(abp_wave)
-                
+
                 # q_ABPoutput.put((predict_abp, abp_wave))
                 q_ABPoutput.put((wave_tECG, wave_ECG, wave_tPPG, wave_PPG, abp_wave, predict_abp, buff_HR, buff_SPO2))
-                
+            ABP_event.clear()
+               
 if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
     parser = argparse.ArgumentParser() # add parser by JG
     opts = parser.parse_known_args() # add parser by JG
     #opts = parse_args() # add parser by JG
-    
+   
     # opts.splunk = "perseus"
     # opts.gui = "SimpleStripchart"
     # ECG is 64 samples and Pleth is 32 samples every 0.25 secs
@@ -1052,7 +1025,7 @@ if __name__ == '__main__':
         # global abp_model, wave_model
         # abp_model = tf.keras.models.load_model('ABP_model_tf')
         # wave_model = tf.keras.models.load_model('wave_model_tf')
-    
+   
         buff_tPPG = deque([0]*1024, maxlen=1024)
         buff_PPG = deque([None]*1024, maxlen=1024)
         buff_HR = 0
@@ -1063,18 +1036,19 @@ if __name__ == '__main__':
         q_ABPoutput = mp.Queue()
         p_plot = mp.Process(target=update_plot, args=(q_wave, q_ABPoutput, stop_event))
         p_plot.start()
-        
+       
+        ABP_event = mp.Event()
         q_ABPinput = mp.Queue()
         # q_ABPoutput = mp.Queue()
-        p_ABP = mp.Process(target=esti_ABP, args=(q_ABPinput,q_ABPoutput))
+        p_ABP = mp.Process(target=esti_ABP, args=(q_ABPinput,q_ABPoutput, ABP_event))
         p_ABP.start()
-        
+       
         redraw_interval = 0.1
         last_poll = time.time()
         last_putdata = time.time()
         # last_redraw = time.time()
         tstream.open()
-        
+       
         try:
             while not stop_event.is_set():
                 now = time.time()
@@ -1100,12 +1074,14 @@ if __name__ == '__main__':
                                 if idx_update >= 0:
                                     buff_tPPG.extend(PPG.t[idx_update:])
                                     buff_PPG.extend(PPG.y[idx_update:])
-                                if time.time() - last_putdata > 0.1:
+                                if not ABP_event.is_set():
                                     # q_wave.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2))
+                                    ABP_event.set()
                                     q_ABPinput.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2))
+                                   
                                     last_putdata = time.time()
                         # q_ABPoutput.put((data.get('Heart Rate'), data.get('SpO2')))
-                        
+                       
                         #self.display.update_data(data, tstream.sampled_data)
                         last_poll = now
                         #self.display.redraw()
