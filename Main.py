@@ -976,28 +976,44 @@ if __name__ == '__main__':
     # opts.values = ["Pleth", 32*4, 'ECG', 64*4]
     # Pleth _must_ be listed first if both Pleth and ECG are included
 
-    ports = serial.tools.list_ports.comports()
+    def select_port(selected_port):
+        global port_sel
+        port_sel = selected_port
+        print(f"선택한 COM 포트: {port_sel}")
+#        root.quit()
+#        root.destroy()
 
-    # 포트의 수 확인
+    def show_no_ports_message():
+        tk.Label(root, text="사용 중인 COM 포트가 없습니다.").pack()
+        tk.Button(root, text="확인", command=lambda: os._exit(0)).pack()
+
+    def show_single_port_message(port):
+        global port_sel
+        port_sel, desc, hwid = port
+        tk.Label(root, text=f"사용 중인 COM 포트: {port_sel}").pack()
+        tk.Button(root, text="확인", command=lambda: (root.quit(), root.destroy())).pack()
+
+    port_sel = None  # 선택된 포트를 저장할 전역 변수
+    ports = serial.tools.list_ports.comports()
+    ports = [port for port in ports if port.device != '/dev/ttyAMA0']  # /dev/ttyAMA0 포트를 제외
+
     if len(ports) == 1:
-        port_sel, desc, hwid = ports[0]
-        print(f"사용 중인 COM 포트: {port_sel}")
+#        show_single_port_message(ports[0])
+        select_port(ports[0].device)  # show_single_port_message 대신 select_port 함수 직접 호출
     elif len(ports) > 1:
-        print("여러 개의 COM 포트가 발견되었습니다. 선택하십시오:")
-        for idx, (port_sel, desc, hwid) in enumerate(ports, start=1):
-            print(f"{idx}. {port_sel}: {desc} [{hwid}]")
-        
-        # 유저 입력 받기
-        selected_idx = int(input("사용할 COM 포트 번호를 선택하세요: ")) - 1
-        
-        if 0 <= selected_idx < len(ports):
-            port_sel, desc, hwid = ports[selected_idx]
-            print(f"선택한 COM 포트: {port_sel}")
-        else:
-            print("잘못된 선택입니다.")
+        root = tk.Tk()
+        root.title("COM 포트 선택")
+        tk.Label(root, text="여러 개의 COM 포트가 발견되었습니다. 선택하십시오:").pack()
+        for port in ports:
+            port_sel, desc, hwid = port
+            button = tk.Button(root, text=f"{port_sel}: {desc} [{hwid}]", command=lambda p=port_sel: select_port(p))
+            button.pack()
+        root.mainloop()
     else:
-        print("사용 중인 COM 포트가 없습니다.")
-        
+        root = tk.Tk()
+        root.title("COM 포트 선택")
+        show_no_ports_message()
+        root.mainloop()
     tstream = PhilipsTelemetryStream(port=port_sel,
                                      values=["Pleth", 32*4, 'ECG', 64*4],
                                      polling_interval=0.05)
