@@ -605,7 +605,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         margin_left_numeric = 0.2
         margin_top_numeric = 0.48
         margin_top_txtBP1 = 0.65
-        margin_top_txtBP2 = 0.15
+        margin_top_txtBP2 = 0.10
         margin_left_AIicon1 = -0.018
         margin_top_AIicon1 = 1.03
         margin_left_AIicon2 = -0.92
