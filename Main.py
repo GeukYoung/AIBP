@@ -596,13 +596,26 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     type_system = 2
     
     if type_system == 1: # for linux
-        fontsize_default = 6
-        margin_left_numtitle = -0.2
-        margin_top_numtitle = 1.15
+        fontsize_default = 5
+        fontsize_title = 4
+        fontsize_numeric = 10
+        fontsize_numeric_BP = 7.0
+        margin_left_numtitle = -0.8
+        margin_top_numtitle = 1.17
         margin_left_numeric = 0.2
-        margin_wspace, margin_hspace = 0.25, 0.5
-        margin_top, margin_bottom, margin_left, margin_right = 0.90, 0.05, 0.01, 0.88
-        icon_zoom = 0.025
+        margin_top_numeric = 0.48
+        margin_top_txtBP1 = 0.65
+        margin_top_txtBP2 = 0.15
+        margin_left_AIicon1 = -0.018
+        margin_top_AIicon1 = 1.03
+        margin_left_AIicon2 = -0.92
+        margin_top_AIicon2 = 1.05
+        icon_zoom = 0.038
+        margin_left_FPS = 1.2
+        margin_top_FPS = 4.25
+        margin_wspace, margin_hspace = 0.95, 0.5
+        margin_top, margin_bottom, margin_left, margin_right = 0.90, 0.05, 0.01, 0.95
+       
     elif type_system == 2: # for surface
         fontsize_default = 6
         fontsize_title = 4
@@ -611,9 +624,19 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         margin_left_numtitle = -0.2
         margin_top_numtitle = 1.09
         margin_left_numeric = 0.45
+        margin_top_numeric = 0.58
+        margin_top_txtBP1 = 0.75
+        margin_top_txtBP2 = 0.35
+        margin_left_AIicon1 = 0.0001
+        margin_top_AIicon1 = 1.03
+        margin_left_AIicon2 = -0.2
+        margin_top_AIicon2 = 1.05
+        icon_zoom = 0.04
+        margin_left_FPS = 1.15
+        margin_top_FPS = 3.7
         margin_wspace, margin_hspace = 0.35, 0.25
         margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
-        icon_zoom = 0.04
+
     elif type_system == 3: # for window
         fontsize_default = 6
         fontsize_title = 4
@@ -622,9 +645,19 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         margin_left_numtitle = -0.2
         margin_top_numtitle = 1.09
         margin_left_numeric = 0.45
+        margin_top_numeric = 0.58
+        margin_top_txtBP1 = 0.75
+        margin_top_txtBP2 = 0.35
+        margin_left_AIicon1 = 0.0001
+        margin_top_AIicon1 = 1.03
+        margin_left_AIicon2 = -0.2
+        margin_top_AIicon2 = 1.06
+        icon_zoom = 0.04
+        margin_left_FPS = 1.15
+        margin_top_FPS = 3.7
         margin_wspace, margin_hspace = 0.35, 0.25
         margin_top, margin_bottom, margin_left, margin_right = 0.92, 0.02, 0.01, 0.97
-        icon_zoom = 0.04
+       
 
     image_path = 'AI_logo.png'  # 여기에 아이콘 이미지 경로를 입력하세요.
     icon_AI = mpimg.imread(image_path)
@@ -635,7 +668,9 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     range_of = {'pleth': (0, 5000), 'ecg': (-1.5, 2), 'abp': (40, 140)}
     colors = ['lime', 'cyan', 'red']
 
-    fig = plt.Figure(figsize=(18, 8))
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    fig = plt.Figure(figsize=(screen_width / 100, screen_height / 100))
     fig.subplots_adjust(wspace=margin_wspace, hspace=margin_hspace, top=margin_top, bottom=margin_bottom, left=margin_left, right=margin_right)
     gs = fig.add_gridspec(nrows=3, ncols=5)
 
@@ -667,7 +702,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     # ABP Wave
     ax_wABP = fig.add_subplot(gs[2, 0:4])
     ax_wABP.set_title("ABP", loc='left', fontweight='bold', color=colors[2], fontsize=fontsize_default * fontsize_title)
-    art_icon1 = AnnotationBbox(imagebox, (0.0001, 1.03), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
+    art_icon1 = AnnotationBbox(imagebox, (margin_left_AIicon1, margin_top_AIicon1), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
     ax_wABP.add_artist(art_icon1)
     ax_wABP.set_xticklabels([])
     ax_wABP.set_yticklabels([])
@@ -680,25 +715,25 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     # HR Value Display
     ax_nECG = fig.add_subplot(gs[0, 4])
     ax_nECG.text(margin_left_numtitle, margin_top_numtitle, "HR", ha='left', va='center', color=colors[0], fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_HR = ax_nECG.text(margin_left_numeric, 0.58, "-", ha='center', va='center', color=colors[0], fontsize=fontsize_default * fontsize_numeric)
+    txt_HR = ax_nECG.text(margin_left_numeric, margin_top_numeric, "75", ha='center', va='center', color=colors[0], fontsize=fontsize_default * fontsize_numeric)
     ax_nECG.axis('off')
 
     # SpO2 and BP Text Display
     ax_nPPG = fig.add_subplot(gs[1, 4])
     ax_nPPG.text(margin_left_numtitle, margin_top_numtitle, "SpO2", ha='left', va='center', color=colors[1], fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_SPO2 = ax_nPPG.text(margin_left_numeric, 0.58, "-", ha='center', va='center', color=colors[1], fontsize=fontsize_default * fontsize_numeric)
+    txt_SPO2 = ax_nPPG.text(margin_left_numeric, margin_top_numeric, "100", ha='center', va='center', color=colors[1], fontsize=fontsize_default * fontsize_numeric)
     ax_nPPG.axis('off')
 
     ax_nBP = fig.add_subplot(gs[2, 4])
     ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "ABP", ha='left', va='center', color=colors[2], fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_SBPDBP = ax_nBP.text(margin_left_numeric + 0.05, 0.75, "- / -", ha='center', va='center', color=colors[2], fontsize=fontsize_default * fontsize_numeric_BP)
-    txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, 0.35, "(-)", ha='center', va='center', color=colors[2], fontsize=fontsize_default * fontsize_numeric_BP)
+    txt_SBPDBP = ax_nBP.text(margin_left_numeric + 0.05, margin_top_txtBP1, "- / -", ha='center', va='center', color=colors[2], fontsize=fontsize_default * fontsize_numeric_BP)
+    txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, margin_top_txtBP2, "(-)", ha='center', va='center', color=colors[2], fontsize=fontsize_default * fontsize_numeric_BP)
     ax_nBP.axis('off')
-    art_icon2 = AnnotationBbox(imagebox, (-0.2, 1.06), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
+    art_icon2 = AnnotationBbox(imagebox, (margin_left_AIicon2, margin_top_AIicon2), xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
     ax_nBP.add_artist(art_icon2)
 
     # FPS
-    txt_FPS = ax_nBP.text(1.15, 3.7, "-/-", ha='right', va='center', color='white', fontsize=fontsize_default * fontsize_numeric_BP * 0.2)
+    txt_FPS = ax_nBP.text(margin_left_FPS, margin_top_FPS, "-/-", ha='right', va='center', color='white', fontsize=fontsize_default * fontsize_numeric_BP * 0.3)
 
     def on_click_zoom(event, fig, axes):
         if event.inaxes in axes:
@@ -719,6 +754,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
             txt.set_color(new_color)
 
     def on_close(event):
+        print("Figure closed.")
         stop_event.set()
 
     # 텍스트 클릭 이벤트를 처리하는 함수
@@ -1058,9 +1094,5 @@ if __name__ == '__main__':
             p_ABP.terminate()
             tstream.close()
             os._exit(0)
-
-            
-
-
 
 # %%
