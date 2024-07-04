@@ -715,13 +715,13 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     # HR Value Display
     ax_nECG = fig.add_subplot(gs[0, 4])
     ax_nECG.text(margin_left_numtitle, margin_top_numtitle, "HR", ha='left', va='center', color=colors[0], fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_HR = ax_nECG.text(margin_left_numeric, margin_top_numeric, "75", ha='center', va='center', color=colors[0], fontsize=fontsize_default * fontsize_numeric)
+    txt_HR = ax_nECG.text(margin_left_numeric, margin_top_numeric, "-", ha='center', va='center', color=colors[0], fontsize=fontsize_default * fontsize_numeric)
     ax_nECG.axis('off')
 
     # SpO2 and BP Text Display
     ax_nPPG = fig.add_subplot(gs[1, 4])
     ax_nPPG.text(margin_left_numtitle, margin_top_numtitle, "SpO2", ha='left', va='center', color=colors[1], fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_SPO2 = ax_nPPG.text(margin_left_numeric, margin_top_numeric, "100", ha='center', va='center', color=colors[1], fontsize=fontsize_default * fontsize_numeric)
+    txt_SPO2 = ax_nPPG.text(margin_left_numeric, margin_top_numeric, "-", ha='center', va='center', color=colors[1], fontsize=fontsize_default * fontsize_numeric)
     ax_nPPG.axis('off')
 
     ax_nBP = fig.add_subplot(gs[2, 4])
@@ -796,9 +796,28 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     abplim_first = 1
 
     while not stop_event.is_set():
-        try:
-            t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0)
+        # try:
+            # t_ecg, s_ecg, t_pleth, s_pleth, HR, SPO2 = q_wave.get(timeout=0)
 
+            # buff_tdelta_ecg.append(time.time() - t_ecg[-1])
+            # buff_base_time_ecg.append(min(buff_tdelta_ecg))
+            # base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
+
+            # buff_tdelta_ppg.append(time.time() - t_pleth[-1])
+            # buff_base_time_ppg.append(min(buff_tdelta_ppg))
+            # base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
+
+            # line_ecg.set_data(t_ecg, s_ecg)
+            # line_pleth.set_data(t_pleth, s_pleth)
+
+            # txt_HR.set_text("{0:.0f}".format(HR))
+            # txt_SPO2.set_text("{0:.0f}".format(SPO2))
+
+        # except:
+        #     pass
+
+        try:
+            t_ecg, s_ecg, t_pleth, s_pleth, s_abp, predict_abp, HR, SPO2 = q_ABPoutput.get(timeout=0)
             buff_tdelta_ecg.append(time.time() - t_ecg[-1])
             buff_base_time_ecg.append(min(buff_tdelta_ecg))
             base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
@@ -813,27 +832,26 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
             txt_HR.set_text("{0:.0f}".format(HR))
             txt_SPO2.set_text("{0:.0f}".format(SPO2))
 
-        except:
-            pass
-
-        try:
-            predict_abp, wave_tPPG, abp_wave = q_ABPoutput.get(timeout=0)
             if abplim_first:
-                min_abp_wave, max_abp_wave = min(abp_wave), max(abp_wave)
+                min_abp_wave, max_abp_wave = min(s_abp), max(s_abp)
                 gap_abp_wave = max_abp_wave - min_abp_wave
                 axis_max_abp_wave = max_abp_wave + 0.1 * gap_abp_wave
                 axis_min_abp_wave = min_abp_wave - 0.1 * gap_abp_wave
                 ax_wABP.set_ylim((axis_min_abp_wave, axis_max_abp_wave))
                 abplim_first = 0
-            line_abp.set_data(wave_tPPG, abp_wave)
+            line_abp.set_data(t_pleth, s_abp)
             txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1]) + "/" + "{0:.0f}".format(predict_abp[0]))
             txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
+
+            print("time :")
+            print((t_pleth[0],t_pleth[-1]))
+            print((t_update-5,t_update))
         except:
             pass
 
         t_update = time.time() - base_time_ecg - 2
         ax_wECG.set_xlim(t_update - 5, t_update)
-        t_update = time.time() - base_time_ppg - 2
+        t_update = time.time() - base_time_ppg - 2.3
         ax_wPPG.set_xlim(t_update - 5, t_update)
         ax_wABP.set_xlim(t_update - 5, t_update)
 
@@ -942,7 +960,7 @@ def esti_ABP(q_ABPinput, q_ABPoutput):
 
     while True:
         if not q_ABPinput.empty():
-            wave_tPPG, wave_PPG = q_ABPinput.get_nowait()
+            wave_tECG, wave_ECG, wave_tPPG, wave_PPG, buff_HR, buff_SPO2 = q_ABPinput.get_nowait()
             
             if ~check_none(wave_PPG):
                 print("get ABP input")
@@ -961,7 +979,7 @@ def esti_ABP(q_ABPinput, q_ABPoutput):
                 # print(abp_wave)
                 
                 # q_ABPoutput.put((predict_abp, abp_wave))
-                q_ABPoutput.put((predict_abp, wave_tPPG, abp_wave))
+                q_ABPoutput.put((wave_tECG, wave_ECG, wave_tPPG, wave_PPG, abp_wave, predict_abp, buff_HR, buff_SPO2))
                 
 if __name__ == '__main__':
 
@@ -1082,9 +1100,9 @@ if __name__ == '__main__':
                                 if idx_update >= 0:
                                     buff_tPPG.extend(PPG.t[idx_update:])
                                     buff_PPG.extend(PPG.y[idx_update:])
-                                if time.time() - last_putdata > 0.8:
-                                    q_wave.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2))
-                                    q_ABPinput.put((buff_tPPG, buff_PPG))
+                                if time.time() - last_putdata > 0.1:
+                                    # q_wave.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2))
+                                    q_ABPinput.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2))
                                     last_putdata = time.time()
                         # q_ABPoutput.put((data.get('Heart Rate'), data.get('SpO2')))
                         
