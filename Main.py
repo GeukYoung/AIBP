@@ -783,11 +783,11 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
     ## realtime update
-    buff_tdelta_ecg = deque(maxlen=8) # for timediff stacking
-    buff_base_time_ecg = deque(maxlen=4) # for smoothing
+    buff_tdelta_ecg = deque(maxlen=1) # for timediff stacking
+    buff_base_time_ecg = deque(maxlen=16) # for smoothing
 
-    buff_tdelta_ppg = deque(maxlen=8) # for timediff stacking
-    buff_base_time_ppg = deque(maxlen=4) # for smoothing
+    buff_tdelta_ppg = deque(maxlen=1) # for timediff stacking
+    buff_base_time_ppg = deque(maxlen=16) # for smoothing
    
     base_time_ecg = time.time()
     base_time_ppg = time.time()
@@ -799,11 +799,11 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
             t_ecg, s_ecg, t_pleth, s_pleth, s_abp, predict_abp, HR, SPO2, is_estiABP = q_ABPoutput.get(timeout=0)
 
             buff_tdelta_ecg.append(time.time() - t_ecg[-1])
-            buff_base_time_ecg.append(max(buff_tdelta_ecg))
+            buff_base_time_ecg.append(min(buff_tdelta_ecg))
             base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
 
             buff_tdelta_ppg.append(time.time() - t_pleth[-1])
-            buff_base_time_ppg.append(max(buff_tdelta_ppg))
+            buff_base_time_ppg.append(min(buff_tdelta_ppg))
             base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
 
             txt_HR.set_text("{0:.0f}".format(HR))
