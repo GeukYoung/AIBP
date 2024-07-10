@@ -921,9 +921,36 @@ def check_none(arr):
 
 def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
     # global abp_model, wave_model
-    abp_model = tf.keras.models.load_model('ABP_model_tf')
-    wave_model = tf.keras.models.load_model('wave_model_tf')
-   
+    # abp_model = tf.keras.models.load_model('ABP_model_tf')
+    # wave_model = tf.keras.models.load_model('wave_model_tf')
+    with open('ABP_model.tflite', 'rb') as f:
+        abp_tflite_model = f.read()
+    abpwave_interpreter = tf.lite.Interpreter(model_content=abp_tflite_model)
+    abpwave_interpreter.allocate_tensors() 
+    abpwave_input_details = abpwave_interpreter.get_input_details()
+    abpwave_output_details = abpwave_interpreter.get_output_details()
+
+    with open('wave_model.tflite', 'rb') as f:
+        ppg_tflite_model = f.read()
+    abpvalue_interpreter = tf.lite.Interpreter(model_content=ppg_tflite_model)
+    abpvalue_interpreter.allocate_tensors() 
+    abpvalue_input_details = abpvalue_interpreter.get_input_details()
+    abpvalue_output_details = abpvalue_interpreter.get_output_details()
+
+    def predict_wave_PPG(wave_PPG):
+        input_data = np.expand_dims(np.array(wave_PPG, dtype=np.float32), axis=0)
+        abpwave_interpreter.set_tensor(abpwave_input_details[0]['index'], input_data)
+        abpwave_interpreter.invoke()
+        predict_result = abpwave_interpreter.get_tensor(abpwave_output_details[0]['index'])
+        return predict_result
+
+    def predict_value_PPG(normalized_ppg):
+        input_data = np.expand_dims(np.array(normalized_ppg, dtype=np.float32), axis=0)
+        abpvalue_interpreter.set_tensor(abpvalue_input_details[0]['index'], input_data)
+        abpvalue_interpreter.invoke()
+        predict_result = abpvalue_interpreter.get_tensor(abpvalue_output_details[0]['index'])
+        return predict_result
+    
     # DBP/SBP/MAP Normaization
     abp_data_min = 20
     abp_data_max = 200
@@ -938,13 +965,13 @@ def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
         if not q_ABPinput.empty():
             wave_tECG, wave_ECG, wave_tPPG, wave_PPG, buff_HR, buff_SPO2 = q_ABPinput.get_nowait()
             if ~check_none(wave_PPG):
-                predict_result = abp_model.predict(np.reshape(list(wave_PPG), (1, 1024)), verbose=0)
+                predict_result = predict_wave_PPG(wave_PPG)
                 predict_result = np.array(predict_result)
                 predict_result = predict_result.reshape(-1)
                 predict_abp  = denormalize_data(predict_result, abp_data_min, abp_data_max, abp_normalized_min, abp_normalized_max)
        
                 normalized_ppg, min_val, max_val = minmax_normalize(wave_PPG)
-                results = wave_model.predict(np.reshape(normalized_ppg, (1, 1024)), verbose=0)
+                results = predict_value_PPG(normalized_ppg)
                 results = np.array(results)
                 predictions = tf.squeeze(results, axis=-1)
                 predict_wave = predictions [0]
