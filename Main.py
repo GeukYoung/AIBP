@@ -795,36 +795,35 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     abplim_first = 1
 
     while not stop_event.is_set():
-        try:
-            t_ecg, s_ecg, t_pleth, s_pleth, s_abp, predict_abp, HR, SPO2 = q_ABPoutput.get(timeout=0)
+        if not q_ABPoutput.empty(): 
+            t_ecg, s_ecg, t_pleth, s_pleth, s_abp, predict_abp, HR, SPO2, is_estiABP = q_ABPoutput.get(timeout=0)
 
             buff_tdelta_ecg.append(time.time() - t_ecg[-1])
-            buff_base_time_ecg.append(min(buff_tdelta_ecg))
+            buff_base_time_ecg.append(max(buff_tdelta_ecg))
             base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
 
             buff_tdelta_ppg.append(time.time() - t_pleth[-1])
-            buff_base_time_ppg.append(min(buff_tdelta_ppg))
+            buff_base_time_ppg.append(max(buff_tdelta_ppg))
             base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
-
-            line_ecg.set_data(t_ecg, s_ecg)
-            line_pleth.set_data(t_pleth, s_pleth)
 
             txt_HR.set_text("{0:.0f}".format(HR))
             txt_SPO2.set_text("{0:.0f}".format(SPO2))
 
-            if abplim_first:
-                min_abp_wave, max_abp_wave = min(s_abp), max(s_abp)
-                gap_abp_wave = max_abp_wave - min_abp_wave
-                axis_max_abp_wave = max_abp_wave + 0.1 * gap_abp_wave
-                axis_min_abp_wave = min_abp_wave - 0.1 * gap_abp_wave
-                ax_wABP.set_ylim((axis_min_abp_wave, axis_max_abp_wave))
-                abplim_first = 0
-            line_abp.set_data(t_pleth, s_abp)
-            txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1]) + "/" + "{0:.0f}".format(predict_abp[0]))
-            txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
+            line_ecg.set_data(t_ecg, s_ecg)
+            line_pleth.set_data(t_pleth, s_pleth)
 
-        except:
-            pass
+            if is_estiABP:
+                line_abp.set_data(t_pleth, s_abp)
+                txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1]) + "/" + "{0:.0f}".format(predict_abp[0]))
+                txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
+
+                if abplim_first:
+                    min_abp_wave, max_abp_wave = min(s_abp), max(s_abp)
+                    gap_abp_wave = max_abp_wave - min_abp_wave
+                    axis_max_abp_wave = max_abp_wave + 0.1 * gap_abp_wave
+                    axis_min_abp_wave = min_abp_wave - 0.1 * gap_abp_wave
+                    ax_wABP.set_ylim((axis_min_abp_wave, axis_max_abp_wave))
+                    abplim_first = 0
 
         t_update = time.time() - base_time_ecg - 2
         ax_wECG.set_xlim(t_update - 5, t_update)
@@ -978,7 +977,11 @@ def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
                 abp_wave = apply_low_pass_filter(predict_wave, cutoff_high, SAMPLING_RATE)
 
                 # q_ABPoutput.put((predict_abp, abp_wave))
-                q_ABPoutput.put((wave_tECG, wave_ECG, wave_tPPG, wave_PPG, abp_wave, predict_abp, buff_HR, buff_SPO2))
+                q_ABPoutput.put((wave_tECG, wave_ECG, wave_tPPG, wave_PPG, abp_wave, predict_abp, buff_HR, buff_SPO2, True))
+
+            else:
+                q_ABPoutput.put((wave_tECG, wave_ECG, wave_tPPG, wave_PPG, 0, 0, buff_HR, buff_SPO2, False))
+
             ABP_event.clear()
                
 if __name__ == '__main__':
@@ -1072,7 +1075,7 @@ if __name__ == '__main__':
        
         redraw_interval = 0.1
         last_poll = time.time()
-        last_putdata = time.time()
+        t_lastTrans = time.time()
         # last_redraw = time.time()
         tstream.open()
        
@@ -1101,12 +1104,11 @@ if __name__ == '__main__':
                                 if idx_update >= 0:
                                     buff_tPPG.extend(PPG.t[idx_update:])
                                     buff_PPG.extend(PPG.y[idx_update:])
-                                if not ABP_event.is_set():
+                                if not ABP_event.is_set() and (time.time() - t_lastTrans > 0.9):
                                     # q_wave.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2))
                                     ABP_event.set()
                                     q_ABPinput.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2))
-                                   
-                                    last_putdata = time.time()
+                                    t_lastTrans = time.time()
                         # q_ABPoutput.put((data.get('Heart Rate'), data.get('SpO2')))
                        
                         #self.display.update_data(data, tstream.sampled_data)
