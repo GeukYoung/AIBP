@@ -734,6 +734,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     # FPS
     txt_FPS = ax_nBP.text(margin_left_FPS, margin_top_FPS, "-/-", ha='right', va='center', color='white', fontsize=fontsize_default * fontsize_numeric_BP * 0.3)
 
+    # ylim adjust
     def on_click_zoom(event, fig, axes):
         if event.inaxes in axes:
             ratio_gap = 0.2
@@ -745,6 +746,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
                 gap = ymax - ymin
                 ax.set_ylim([ymin - ratio_gap * gap, ymax + ratio_gap * gap])
 
+    # fps text toggle
     def toggle_fps(event, txt, fig):
         bbox = txt.get_window_extent(fig.canvas.get_renderer())
         if bbox.contains(event.x, event.y):
@@ -752,11 +754,12 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
             new_color = 'black' if current_color == 'white' else 'white'
             txt.set_color(new_color)
 
+    # program exit event
     def on_close(event):
         print("Figure closed.")
         stop_event.set()
 
-    # 텍스트 클릭 이벤트를 처리하는 함수
+    # multi click event for exit
     global click_count, last_click_time
     click_count = 0
     last_click_time = time.time()
@@ -782,41 +785,50 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     canvas.draw()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-    ## realtime update
-    buff_tdelta_ecg = deque(maxlen=1) # for timediff stacking
+    ## for realtime update
+    buff_tdelta_ecg = deque(maxlen=3) # for timediff stacking
     buff_base_time_ecg = deque(maxlen=16) # for smoothing
 
-    buff_tdelta_ppg = deque(maxlen=1) # for timediff stacking
+    buff_tdelta_ppg = deque(maxlen=3) # for timediff stacking
     buff_base_time_ppg = deque(maxlen=16) # for smoothing
    
     base_time_ecg = time.time()
     base_time_ppg = time.time()
     t_pre = time.time()
     abplim_first = 1
+    skip_frame = 1 # first 2 frame receive time unstable!!
+    buff_frame = 2 # after 2 frame receive time average for init value!!
 
     while not stop_event.is_set():
         if not q_ABPoutput.empty(): 
-            t_ecg, s_ecg, t_pleth, s_pleth, s_abp, predict_abp, HR, SPO2, is_estiABP = q_ABPoutput.get(timeout=0)
+            t_ecg, s_ecg, t_pleth, s_pleth, s_abp, predict_abp, HR, SPO2, t_receive, is_estiABP = q_ABPoutput.get(timeout=0)
+            # time adjust for frame smoothing
+            if skip_frame == 0:
+                buff_tdelta_ecg.append(t_receive - t_ecg[-1])
+                buff_tdelta_ppg.append(t_receive - t_pleth[-1])
+                if buff_frame == 0:
+                    buff_frame -= 1
+                else:
+                    buff_base_time_ecg.append(max(buff_tdelta_ecg))
+                    buff_base_time_ppg.append(max(buff_tdelta_ppg))
+                    base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
+                    base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
+            else:
+                skip_frame -= 1
 
-            buff_tdelta_ecg.append(time.time() - t_ecg[-1])
-            buff_base_time_ecg.append(min(buff_tdelta_ecg))
-            base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
-
-            buff_tdelta_ppg.append(time.time() - t_pleth[-1])
-            buff_base_time_ppg.append(min(buff_tdelta_ppg))
-            base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
-
+            # UI data update
             txt_HR.set_text("{0:.0f}".format(HR))
             txt_SPO2.set_text("{0:.0f}".format(SPO2))
-
             line_ecg.set_data(t_ecg, s_ecg)
             line_pleth.set_data(t_pleth, s_pleth)
 
+            # ABP data inable check
             if is_estiABP:
                 line_abp.set_data(t_pleth, s_abp)
                 txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1]) + "/" + "{0:.0f}".format(predict_abp[0]))
                 txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
 
+                # abp ylim init
                 if abplim_first:
                     min_abp_wave, max_abp_wave = min(s_abp), max(s_abp)
                     gap_abp_wave = max_abp_wave - min_abp_wave
@@ -825,18 +837,21 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
                     ax_wABP.set_ylim((axis_min_abp_wave, axis_max_abp_wave))
                     abplim_first = 0
 
-        t_update = time.time() - base_time_ecg - 2
+        # xlim update
+        t_update = time.time() - base_time_ecg - 1.7
         ax_wECG.set_xlim(t_update - 5, t_update)
-        t_update = time.time() - base_time_ppg - 2.3
+        t_update = time.time() - base_time_ppg - 2.0
         ax_wPPG.set_xlim(t_update - 5, t_update)
         ax_wABP.set_xlim(t_update - 5, t_update)
 
+        # for FPS update
         execution_time = time.time() - t_pre
         t_pre = time.time()
         if execution_time == 0:
             execution_time = 0.01
         txt_FPS.set_text("{0:.0f} fps".format(1 / execution_time))
 
+        # frame update
         fig.canvas.draw()
         root.update_idletasks()
         root.update()
@@ -962,7 +977,7 @@ def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
 
     while True:
         if not q_ABPinput.empty():
-            wave_tECG, wave_ECG, wave_tPPG, wave_PPG, buff_HR, buff_SPO2 = q_ABPinput.get_nowait()
+            wave_tECG, wave_ECG, wave_tPPG, wave_PPG, buff_HR, buff_SPO2, t_receive = q_ABPinput.get_nowait()
             if ~check_none(wave_PPG):
                 predict_result = predict_wave_PPG(wave_PPG)
                 predict_result = np.array(predict_result)
@@ -977,10 +992,10 @@ def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
                 abp_wave = apply_low_pass_filter(predict_wave, cutoff_high, SAMPLING_RATE)
 
                 # q_ABPoutput.put((predict_abp, abp_wave))
-                q_ABPoutput.put((wave_tECG, wave_ECG, wave_tPPG, wave_PPG, abp_wave, predict_abp, buff_HR, buff_SPO2, True))
+                q_ABPoutput.put((wave_tECG, wave_ECG, wave_tPPG, wave_PPG, abp_wave, predict_abp, buff_HR, buff_SPO2, t_receive, True))
 
             else:
-                q_ABPoutput.put((wave_tECG, wave_ECG, wave_tPPG, wave_PPG, 0, 0, buff_HR, buff_SPO2, False))
+                q_ABPoutput.put((wave_tECG, wave_ECG, wave_tPPG, wave_PPG, 0, 0, buff_HR, buff_SPO2, t_receive, False))
 
             ABP_event.clear()
                
@@ -1084,6 +1099,7 @@ if __name__ == '__main__':
                 now = time.time()
                 if now > (last_poll + tstream.polling_interval):
                     data = tstream.read(1, blocking=True)
+                    t_receive = time.time()
                     if data:
                         temp = list(tstream.sampled_data.keys())
                         HR = data.get('Heart Rate')
@@ -1104,10 +1120,10 @@ if __name__ == '__main__':
                                 if idx_update >= 0:
                                     buff_tPPG.extend(PPG.t[idx_update:])
                                     buff_PPG.extend(PPG.y[idx_update:])
-                                if not ABP_event.is_set() and (time.time() - t_lastTrans > 0.9):
+                                if not ABP_event.is_set() and (time.time() - t_lastTrans > 0.3):
                                     # q_wave.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2))
                                     ABP_event.set()
-                                    q_ABPinput.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2))
+                                    q_ABPinput.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2,t_receive))
                                     t_lastTrans = time.time()
                         # q_ABPoutput.put((data.get('Heart Rate'), data.get('SpO2')))
                        
