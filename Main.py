@@ -732,7 +732,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     ax_nBP.add_artist(art_icon2)
 
     # FPS
-    txt_FPS = ax_nBP.text(margin_left_FPS, margin_top_FPS, "-/-", ha='right', va='center', color='white', fontsize=fontsize_default * fontsize_numeric_BP * 0.3)
+    txt_FPS = ax_nBP.text(margin_left_FPS, margin_top_FPS, "-/-", ha='right', va='center', color='black', fontsize=fontsize_default * fontsize_numeric_BP * 0.3)
 
     # ylim adjust
     def on_click_zoom(event, fig, axes):
@@ -1120,7 +1120,7 @@ if __name__ == '__main__':
                                 if idx_update >= 0:
                                     buff_tPPG.extend(PPG.t[idx_update:])
                                     buff_PPG.extend(PPG.y[idx_update:])
-                                if not ABP_event.is_set() and (time.time() - t_lastTrans > 0.3):
+                                if not ABP_event.is_set() and (time.time() - t_lastTrans > 0.8):
                                     # q_wave.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2))
                                     ABP_event.set()
                                     q_ABPinput.put((ECG.t, ECG.y, buff_tPPG, buff_PPG, buff_HR, buff_SPO2,t_receive))
