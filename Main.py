@@ -134,13 +134,13 @@ class PhilipsTelemetryStream(TelemetryStream):
         def request_association():
 
             if not self.rs232:
-                logging.warn('Trying to send an Association Request without a socket!')
+                logging.warning('Trying to send an Association Request without a socket!')
                 raise CriticalIOError
             try:
                 self.rs232.send(self.AssociationRequest)
                 self.logger.debug('Sent Association Request...')
             except:
-                self.logger.warn("Unable to send Association Request")
+                self.logger.warning("Unable to send Association Request")
                 raise IOError
 
         def receive_association_response():
@@ -148,7 +148,7 @@ class PhilipsTelemetryStream(TelemetryStream):
 
             # Could handle no message in getMessageType (hrm)
             if not association_message:
-                logging.warn('No association received')
+                logging.warning('No association received')
                 raise IOError
 
             message_type = self.decoder.getMessageType(association_message)
@@ -261,7 +261,7 @@ class PhilipsTelemetryStream(TelemetryStream):
 
             message = self.rs232.receive()
             if not message:
-                logging.warn('No priority list msg received!')
+                logging.warning('No priority list msg received!')
                 break
 
             message_type = self.decoder.getMessageType(message)
@@ -280,7 +280,7 @@ class PhilipsTelemetryStream(TelemetryStream):
             # If MDSCreateEvent, then state failure to confirm
             elif message_type == 'MDSCreateEvent':
                 no_confirmation = False
-                logging.warn('Failed to confirm priority list setting.')
+                logging.warning('Failed to confirm priority list setting.')
 
     def submit_keep_alive(self):
         self.rs232.send(self.KeepAliveMessage)
@@ -431,7 +431,7 @@ class PhilipsTelemetryStream(TelemetryStream):
 
         message = self.rs232.receive()
         if not message:
-            logging.warn('No message received')
+            logging.warning('No message received')
             if (now - self.last_read_time) > self.timeout:
                 logging.error('Data stream timed out')
                 raise IOError
@@ -452,7 +452,7 @@ class PhilipsTelemetryStream(TelemetryStream):
         #         raise IOError
 
         elif message_type == 'RemoteOperationError':
-            logging.warn('Received (unhandled) \'RemoteOpsError\' message type')
+            logging.warning('Received (unhandled) \'RemoteOpsError\' message type')
 
         elif message_type == 'MDSSinglePollActionResult':
             logging.debug('Received (unhandled) \'SinglePollActionResult\' message type')
@@ -461,12 +461,12 @@ class PhilipsTelemetryStream(TelemetryStream):
             decoded_message = self.decoder.readData(message)
             m = self.distiller.refine(decoded_message)
             if not m:
-                logging.warn('Failed to distill message: {0}'.format(decoded_message))
+                logging.warning('Failed to distill message: {0}'.format(decoded_message))
             else:
                 self.last_read_time = time.time()
 
         else:
-            logging.warn('Received {0}'.format(message_type))
+            logging.warning('Received {0}'.format(message_type))
 
         # Update current state
         if m:
