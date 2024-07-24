@@ -438,7 +438,8 @@ class IntellivueDistiller(object):
                 # This possibly fixes growing forever problem
                 del self.VitalsNumericsAlarmsData[currentTime]
         except:
-            print('Distiller Numeric Error (CurrentTime is not exist)')
+            no_tAlarm = None
+            # print('Distiller Numeric Error (CurrentTime is not exist)')
         
         if len(ret) < 2:
             return None
