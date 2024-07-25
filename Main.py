@@ -493,7 +493,7 @@ class PhilipsTelemetryStream(TelemetryStream):
         airway = {'etCO2': m.get('etCO2'),
                   'Respiration Rate': m.get('Airway Respiration Rate')}
 
-        ret =  {'ECG': m.get(ecg_label),
+        ret =  {'II': m.get(ecg_label),
                 'Pleth': m.get('PLETH wave label'),
                 'Heart Rate': m.get('Heart Rate'),
                 'SpO2': m.get('Arterial Oxygen Saturation'),
@@ -1051,7 +1051,7 @@ if __name__ == '__main__':
         show_no_ports_message()
         root.mainloop()
     tstream = PhilipsTelemetryStream(port=port_sel,
-                                     values=["Pleth", 32*4, 'ECG', 64*4],
+                                     values=["Pleth", 32*4, 'II', 64*8],
                                      polling_interval=0.05)
 
     # Attach any post-processing functions
@@ -1108,8 +1108,8 @@ if __name__ == '__main__':
                         SPO2 = data.get('SpO2')
                         if SPO2:
                             buff_SPO2 = SPO2
-                        if ('ECG' in temp) and ('Pleth' in temp):
-                            channel_ECG = tstream.sampled_data.get('ECG')
+                        if ('II' in temp) and ('Pleth' in temp):
+                            channel_ECG = tstream.sampled_data.get('II')
                             channel_PPG = tstream.sampled_data.get('Pleth')
                             if (not channel_ECG) or (not channel_PPG):
                                 print("not channel")
