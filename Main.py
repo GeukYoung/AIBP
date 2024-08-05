@@ -589,6 +589,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         root = Toplevel()
         root.attributes('-fullscreen', True)  # 창을 전체 화면으로 설정
         root.attributes('-topmost', True)     # 창을 항상 위에 위치하도록 설정
+        root.config(cursor="none")            # 마우스커서 숨기기
         root.overrideredirect(True)           # 타이틀 바 제거
         return root
 
