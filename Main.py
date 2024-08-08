@@ -740,7 +740,6 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         valid_sig = [x for x in sig if x is not None and isinstance(x, (int, float))]
         
         if not valid_sig:
-            print(sig)
             return 0, 1  # 유효한 값이 없는 경우
         
         min_sig, max_sig = min(valid_sig), max(valid_sig)
@@ -814,19 +813,28 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     while not stop_event.is_set():
         if not q_ABPoutput.empty(): 
             t_ecg, s_ecg, t_pleth, s_pleth, s_abp, predict_abp, HR, SPO2, t_receive, is_estiABP = q_ABPoutput.get(timeout=0)
+
             # time adjust for frame smoothing
             if skip_frame > 0:
                 skip_frame -= 1
             else:
                 buff_tdelta_ecg.append(t_receive - t_ecg[-1])
                 buff_tdelta_ppg.append(t_receive - t_pleth[-1])
+                
+                if skip_frame == 0:
+                    ylim_min, ylim_max = ylim_auto(s_ecg, 0.2)
+                    ax_wECG.set_ylim((ylim_min, ylim_max))
+                    ylim_min, ylim_max = ylim_auto(s_pleth, 0.2)
+                    ax_wPPG.set_ylim((ylim_min, ylim_max))
+                    skip_frame -= 1
+
                 if buff_frame == 0:
                     buff_frame -= 1
                 else:
                     buff_base_time_ecg.append(max(buff_tdelta_ecg))
                     buff_base_time_ppg.append(max(buff_tdelta_ppg))
                     base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
-                    base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)                
+                    base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
 
             # UI data update
             txt_HR.set_text("{0:.0f}".format(HR))
