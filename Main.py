@@ -735,17 +735,28 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     # FPS
     txt_FPS = ax_nBP.text(margin_left_FPS, margin_top_FPS, "-/-", ha='right', va='center', color='black', fontsize=fontsize_default * fontsize_numeric_BP * 0.3)
 
+    def ylim_auto(sig, gap_ratio):
+        # None과 비숫자 값을 필터링
+        valid_sig = [x for x in sig if x is not None and isinstance(x, (int, float))]
+        
+        if not valid_sig:
+            print(sig)
+            return 0, 1  # 유효한 값이 없는 경우
+        
+        min_sig, max_sig = min(valid_sig), max(valid_sig)
+        gap_sig = max_sig - min_sig
+        min_ylim, max_ylim = min_sig - gap_ratio * gap_sig, max_sig + gap_ratio * gap_sig
+        return min_ylim, max_ylim
+
     # ylim adjust
     def on_click_zoom(event, fig, axes):
         if event.inaxes in axes:
-            ratio_gap = 0.2
             ax = event.inaxes
             lines = ax.get_lines()
             if lines:
                 ydata = np.concatenate([line.get_ydata() for line in lines])
-                ymin, ymax = np.min(ydata), np.max(ydata)
-                gap = ymax - ymin
-                ax.set_ylim([ymin - ratio_gap * gap, ymax + ratio_gap * gap])
+                ylim_min, ylim_max = ylim_auto(ydata, 0.2)
+                ax.set_ylim([ylim_min, ylim_max])
 
     # fps text toggle
     def toggle_fps(event, txt, fig):
@@ -804,7 +815,9 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         if not q_ABPoutput.empty(): 
             t_ecg, s_ecg, t_pleth, s_pleth, s_abp, predict_abp, HR, SPO2, t_receive, is_estiABP = q_ABPoutput.get(timeout=0)
             # time adjust for frame smoothing
-            if skip_frame == 0:
+            if skip_frame > 0:
+                skip_frame -= 1
+            else:
                 buff_tdelta_ecg.append(t_receive - t_ecg[-1])
                 buff_tdelta_ppg.append(t_receive - t_pleth[-1])
                 if buff_frame == 0:
@@ -813,9 +826,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
                     buff_base_time_ecg.append(max(buff_tdelta_ecg))
                     buff_base_time_ppg.append(max(buff_tdelta_ppg))
                     base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
-                    base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
-            else:
-                skip_frame -= 1
+                    base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)                
 
             # UI data update
             txt_HR.set_text("{0:.0f}".format(HR))
@@ -831,10 +842,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
 
                 # abp ylim init
                 if abplim_first:
-                    min_abp_wave, max_abp_wave = min(s_abp), max(s_abp)
-                    gap_abp_wave = max_abp_wave - min_abp_wave
-                    axis_max_abp_wave = max_abp_wave + 0.1 * gap_abp_wave
-                    axis_min_abp_wave = min_abp_wave - 0.1 * gap_abp_wave
+                    axis_min_abp_wave, axis_max_abp_wave = ylim_auto(s_abp, 0.2)
                     ax_wABP.set_ylim((axis_min_abp_wave, axis_max_abp_wave))
                     abplim_first = 0
 
