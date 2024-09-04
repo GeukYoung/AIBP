@@ -594,7 +594,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
         return root
 
     root = create_main_window()
-    type_system = 2
+    type_system = 1
    
     if type_system == 1: # for linux
         fontsize_default = 5
@@ -738,10 +738,10 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     def ylim_auto(sig, gap_ratio):
         # None과 비숫자 값을 필터링
         valid_sig = [x for x in sig if x is not None and isinstance(x, (int, float))]
-        
+       
         if not valid_sig:
             return 0, 1  # 유효한 값이 없는 경우
-        
+       
         min_sig, max_sig = min(valid_sig), max(valid_sig)
         gap_sig = max_sig - min_sig
         min_ylim, max_ylim = min_sig - gap_ratio * gap_sig, max_sig + gap_ratio * gap_sig
@@ -803,38 +803,40 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     buff_tdelta_ppg = deque(maxlen=3) # for timediff stacking
     buff_base_time_ppg = deque(maxlen=16) # for smoothing
    
-    base_time_ecg = time.time()
-    base_time_ppg = time.time()
+    base_time_ecg = time.time()-100
+    base_time_ppg = time.time()-100
     t_pre = time.time()
     abplim_first = 1
-    skip_frame = 1 # first 2 frame receive time unstable!!
-    buff_frame = 2 # after 2 frame receive time average for init value!!
+    skip_frame = 3 # first 2 frame receive time unstable!!
+    buff_frame = 0 # after 2 frame receive time average for init value!!
 
     while not stop_event.is_set():
-        if not q_ABPoutput.empty(): 
+        if not q_ABPoutput.empty():
             t_ecg, s_ecg, t_pleth, s_pleth, s_abp, predict_abp, HR, SPO2, t_receive, is_estiABP = q_ABPoutput.get(timeout=0)
 
             # time adjust for frame smoothing
             if skip_frame > 0:
+#                print(skip_frame)
                 skip_frame -= 1
             else:
                 buff_tdelta_ecg.append(t_receive - t_ecg[-1])
                 buff_tdelta_ppg.append(t_receive - t_pleth[-1])
-                
-                if skip_frame == 0:
+               
+                if skip_frame > -5:
                     ylim_min, ylim_max = ylim_auto(s_ecg, 0.2)
                     ax_wECG.set_ylim((ylim_min, ylim_max))
                     ylim_min, ylim_max = ylim_auto(s_pleth, 0.2)
                     ax_wPPG.set_ylim((ylim_min, ylim_max))
                     skip_frame -= 1
 
-                if buff_frame == 0:
+                if buff_frame > 0:
                     buff_frame -= 1
                 else:
                     buff_base_time_ecg.append(max(buff_tdelta_ecg))
                     buff_base_time_ppg.append(max(buff_tdelta_ppg))
                     base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
                     base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
+#                    print(base_time_ecg)
 
             # UI data update
             txt_HR.set_text("{0:.0f}".format(HR))
@@ -957,14 +959,14 @@ def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
     with open('ABP_model.tflite', 'rb') as f:
         abp_tflite_model = f.read()
     abpwave_interpreter = tf.lite.Interpreter(model_content=abp_tflite_model)
-    abpwave_interpreter.allocate_tensors() 
+    abpwave_interpreter.allocate_tensors()
     abpwave_input_details = abpwave_interpreter.get_input_details()
     abpwave_output_details = abpwave_interpreter.get_output_details()
 
     with open('wave_model.tflite', 'rb') as f:
         ppg_tflite_model = f.read()
     abpvalue_interpreter = tf.lite.Interpreter(model_content=ppg_tflite_model)
-    abpvalue_interpreter.allocate_tensors() 
+    abpvalue_interpreter.allocate_tensors()
     abpvalue_input_details = abpvalue_interpreter.get_input_details()
     abpvalue_output_details = abpvalue_interpreter.get_output_details()
 
@@ -981,7 +983,7 @@ def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
         abpvalue_interpreter.invoke()
         predict_result = abpvalue_interpreter.get_tensor(abpvalue_output_details[0]['index'])
         return predict_result
-    
+   
     # DBP/SBP/MAP Normaization
     abp_data_min = 20
     abp_data_max = 200
@@ -1033,8 +1035,8 @@ if __name__ == '__main__':
         global port_sel
         port_sel = selected_port
         print(f"선택한 COM 포트: {port_sel}")
-#        root.quit()
-#        root.destroy()
+        if root is not None:  # root가 None이 아닌 경우에만 quit 호출
+            root.quit()  # Tkinter 루프 종료
 
     def show_no_ports_message():
         tk.Label(root, text="사용 중인 COM 포트가 없습니다.").pack()
@@ -1043,34 +1045,49 @@ if __name__ == '__main__':
     def show_single_port_message(port):
         global port_sel
         port_sel, desc, hwid = port
-        tk.Label(root, text=f"사용 중인 COM 포트: {port_sel}").pack()
-        tk.Button(root, text="확인", command=lambda: (root.quit(), root.destroy())).pack()
+#        tk.Label(root, text=f"사용 중인 COM 포트: {port_sel}").pack()
+#        tk.Button(root, text="확인", command=lambda: (root.quit(), root.destroy())).pack()
 
     port_sel = None  # 선택된 포트를 저장할 전역 변수
     ports = serial.tools.list_ports.comports()
-    ports = [port for port in ports if port.device != '/dev/ttyAMA0']  # /dev/ttyAMA0 포트를 제외
+    print(ports)
+    ports = [port for port in ports if not port.device.startswith('/dev/ttyAMA')]  # /dev/ttyAMA 포트를 제외
+
+    root = None  # root 변수를 초기화
 
     if len(ports) == 1:
-#        show_single_port_message(ports[0])
-        select_port(ports[0].device)  # show_single_port_message 대신 select_port 함수 직접 호출
+        # 단일 포트가 발견된 경우
+#        root = tk.Tk()  # root 초기화
+        show_single_port_message(ports[0])  # show_single_port_message 호출
+#        root.mainloop()
     elif len(ports) > 1:
+        # 여러 포트가 발견된 경우
         root = tk.Tk()
         root.title("COM 포트 선택")
         tk.Label(root, text="여러 개의 COM 포트가 발견되었습니다. 선택하십시오:").pack()
         for port in ports:
             port_sel, desc, hwid = port
+            # 포트 정보를 직접 lambda에 전달
             button = tk.Button(root, text=f"{port_sel}: {desc} [{hwid}]", command=lambda p=port_sel: select_port(p))
             button.pack()
         root.mainloop()
-    else:
+    elif len(ports) == 0:
+        # 포트가 발견되지 않은 경우
         root = tk.Tk()
         root.title("COM 포트 선택")
         show_no_ports_message()
         root.mainloop()
-    tstream = PhilipsTelemetryStream(port=port_sel,
-                                     values=["Pleth", 32*4, 'II', 64*8],
-                                     polling_interval=0.05)
 
+    # Tkinter 루프 종료 후 포트가 선택되었는지 확인
+    if port_sel is not None:
+        print(f"선택된 포트로 프로세스를 시작합니다: {port_sel}")
+        # PhilipsTelemetryStream을 설정하는 코드
+        tstream = PhilipsTelemetryStream(port=port_sel,                                          values=["Pleth", 32*4, 'II', 64*8], polling_interval=0.05)
+    else:
+        print("포트가 선택되지 않았습니다.")
+       
+    # ports = [port for port in ports if not port.device.startswith('/dev/ttyAMA')]  # /dev/ttyAMA 포트를 제외
+           
     # Attach any post-processing functions
     tstream.add_update_func(qos)
 
