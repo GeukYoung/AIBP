@@ -587,10 +587,10 @@ class PhilipsTelemetryStream(TelemetryStream):
 def update_plot(q_wave, q_ABPoutput, stop_event):
     def create_main_window():
         root = Toplevel()
-        root.attributes('-fullscreen', True)  # 창을 전체 화면으로 설정
-        root.attributes('-topmost', True)     # 창을 항상 위에 위치하도록 설정
-        root.config(cursor="none")            # 마우스커서 숨기기
-        root.overrideredirect(True)           # 타이틀 바 제거
+#        root.attributes('-fullscreen', True)  # 창을 전체 화면으로 설정
+#        root.attributes('-topmost', True)     # 창을 항상 위에 위치하도록 설정
+#        root.config(cursor="none")            # 마우스커서 숨기기
+#        root.overrideredirect(True)           # 타이틀 바 제거
         return root
 
     root = create_main_window()
@@ -1142,6 +1142,8 @@ if __name__ == '__main__':
         # last_redraw = time.time()
         tstream.open()
        
+        lastupdate_HR, lastupdate_SPO2 = 0, 0
+       
         try:
             while not stop_event.is_set():
                 now = time.time()
@@ -1153,13 +1155,20 @@ if __name__ == '__main__':
                         HR = data.get('Heart Rate')
                         if HR:
                             buff_HR = HR
+                            lastupdate_HR = time.time()
                         else:
-                            buff_HR = 0
+                            if time.time() - lastupdate_HR > 2:
+                                buff_HR = 0
+                            
                         SPO2 = data.get('SpO2')
+                        print(SPO2)
                         if SPO2:
                             buff_SPO2 = SPO2
+                            lastupdate_SPO2 = time.time()
                         else:
-                            buff_SPO2 = 0
+                            if time.time() - lastupdate_SPO2 > 3:
+                                buff_SPO2 = 0
+                            
                         if ('II' in temp) and ('Pleth' in temp):
                             channel_ECG = tstream.sampled_data.get('II')
                             channel_PPG = tstream.sampled_data.get('Pleth')
