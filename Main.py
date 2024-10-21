@@ -738,10 +738,10 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     def ylim_auto(sig, gap_ratio):
         # None과 비숫자 값을 필터링
         valid_sig = [x for x in sig if x is not None and isinstance(x, (int, float))]
-       
+        
         if not valid_sig:
             return 0, 1  # 유효한 값이 없는 경우
-       
+        
         min_sig, max_sig = min(valid_sig), max(valid_sig)
         gap_sig = max_sig - min_sig
         min_ylim, max_ylim = min_sig - gap_ratio * gap_sig, max_sig + gap_ratio * gap_sig
@@ -811,7 +811,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     buff_frame = 0 # after 2 frame receive time average for init value!!
 
     while not stop_event.is_set():
-        if not q_ABPoutput.empty():
+        if not q_ABPoutput.empty(): 
             t_ecg, s_ecg, t_pleth, s_pleth, s_abp, predict_abp, HR, SPO2, t_receive, is_estiABP = q_ABPoutput.get(timeout=0)
 
             # time adjust for frame smoothing
@@ -821,7 +821,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
             else:
                 buff_tdelta_ecg.append(t_receive - t_ecg[-1])
                 buff_tdelta_ppg.append(t_receive - t_pleth[-1])
-               
+                
                 if skip_frame > -5:
                     ylim_min, ylim_max = ylim_auto(s_ecg, 0.2)
                     ax_wECG.set_ylim((ylim_min, ylim_max))
@@ -839,16 +839,29 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
 #                    print(base_time_ecg)
 
             # UI data update
-            txt_HR.set_text("{0:.0f}".format(HR))
-            txt_SPO2.set_text("{0:.0f}".format(SPO2))
+            if not HR == 0:
+                txt_HR.set_text("{0:.0f}".format(HR))
+            else:
+                txt_HR.set_text("-")
+                
+            if not SPO2 == 0:
+                txt_SPO2.set_text("{0:.0f}".format(SPO2))
+            else:
+                txt_SPO2.set_text("-")
+                
             line_ecg.set_data(t_ecg, s_ecg)
             line_pleth.set_data(t_pleth, s_pleth)
 
             # ABP data inable check
             if is_estiABP:
                 line_abp.set_data(t_pleth, s_abp)
-                txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1]) + "/" + "{0:.0f}".format(predict_abp[0]))
-                txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
+                
+                if not SPO2 == 0:
+                    txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1]) + "/" + "{0:.0f}".format(predict_abp[0]))
+                    txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
+                else:
+                    txt_SBPDBP.set_text("- / -")
+                    txt_MAP.set_text("(-)")
 
                 # abp ylim init
                 if abplim_first:
@@ -959,14 +972,14 @@ def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
     with open('ABP_model.tflite', 'rb') as f:
         abp_tflite_model = f.read()
     abpwave_interpreter = tf.lite.Interpreter(model_content=abp_tflite_model)
-    abpwave_interpreter.allocate_tensors()
+    abpwave_interpreter.allocate_tensors() 
     abpwave_input_details = abpwave_interpreter.get_input_details()
     abpwave_output_details = abpwave_interpreter.get_output_details()
 
     with open('wave_model.tflite', 'rb') as f:
         ppg_tflite_model = f.read()
     abpvalue_interpreter = tf.lite.Interpreter(model_content=ppg_tflite_model)
-    abpvalue_interpreter.allocate_tensors()
+    abpvalue_interpreter.allocate_tensors() 
     abpvalue_input_details = abpvalue_interpreter.get_input_details()
     abpvalue_output_details = abpvalue_interpreter.get_output_details()
 
@@ -983,7 +996,7 @@ def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
         abpvalue_interpreter.invoke()
         predict_result = abpvalue_interpreter.get_tensor(abpvalue_output_details[0]['index'])
         return predict_result
-   
+    
     # DBP/SBP/MAP Normaization
     abp_data_min = 20
     abp_data_max = 200
@@ -998,10 +1011,11 @@ def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
         if not q_ABPinput.empty():
             wave_tECG, wave_ECG, wave_tPPG, wave_PPG, buff_HR, buff_SPO2, t_receive = q_ABPinput.get_nowait()
             if ~check_none(wave_PPG):
+#                print(np.std(wave_PPG))
                 predict_result = predict_wave_PPG(wave_PPG)
                 predict_result = np.array(predict_result)
                 predict_result = predict_result.reshape(-1)
-                predict_abp  = denormalize_data(predict_result, abp_data_min, abp_data_max, abp_normalized_min, abp_normalized_max)
+                predict_abp = denormalize_data(predict_result, abp_data_min, abp_data_max, abp_normalized_min, abp_normalized_max)
        
                 normalized_ppg, min_val, max_val = minmax_normalize(wave_PPG)
                 results = predict_value_PPG(normalized_ppg)
@@ -1085,9 +1099,9 @@ if __name__ == '__main__':
         tstream = PhilipsTelemetryStream(port=port_sel,                                          values=["Pleth", 32*4, 'II', 64*8], polling_interval=0.05)
     else:
         print("포트가 선택되지 않았습니다.")
-       
+        
     # ports = [port for port in ports if not port.device.startswith('/dev/ttyAMA')]  # /dev/ttyAMA 포트를 제외
-           
+            
     # Attach any post-processing functions
     tstream.add_update_func(qos)
 
@@ -1139,9 +1153,13 @@ if __name__ == '__main__':
                         HR = data.get('Heart Rate')
                         if HR:
                             buff_HR = HR
+                        else:
+                            buff_HR = 0
                         SPO2 = data.get('SpO2')
                         if SPO2:
                             buff_SPO2 = SPO2
+                        else:
+                            buff_SPO2 = 0
                         if ('II' in temp) and ('Pleth' in temp):
                             channel_ECG = tstream.sampled_data.get('II')
                             channel_PPG = tstream.sampled_data.get('Pleth')
