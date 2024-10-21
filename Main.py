@@ -587,10 +587,10 @@ class PhilipsTelemetryStream(TelemetryStream):
 def update_plot(q_wave, q_ABPoutput, stop_event):
     def create_main_window():
         root = Toplevel()
-#        root.attributes('-fullscreen', True)  # 창을 전체 화면으로 설정
-#        root.attributes('-topmost', True)     # 창을 항상 위에 위치하도록 설정
-#        root.config(cursor="none")            # 마우스커서 숨기기
-#        root.overrideredirect(True)           # 타이틀 바 제거
+        root.attributes('-fullscreen', True)  # 창을 전체 화면으로 설정
+        root.attributes('-topmost', True)     # 창을 항상 위에 위치하도록 설정
+        root.config(cursor="none")            # 마우스커서 숨기기
+        root.overrideredirect(True)           # 타이틀 바 제거
         return root
 
     root = create_main_window()
@@ -1063,35 +1063,38 @@ if __name__ == '__main__':
 #        tk.Button(root, text="확인", command=lambda: (root.quit(), root.destroy())).pack()
 
     port_sel = None  # 선택된 포트를 저장할 전역 변수
+    root = None  # root 변수를 초기화
+    
+    def check_ports():
+        ports = serial.tools.list_ports.comports()
+        ports = [port for port in ports if not port.device.startswith('/dev/ttyAMA')]  # /dev/ttyAMA 포트를 제외
+
+        if len(ports) == 1:
+            # 단일 포트가 발견된 경우
+            show_single_port_message(ports[0])  # 포트 정보 출력
+            root.quit()  # 창 종료
+        else:
+            # 계속해서 포트를 확인 (1초 후 다시 체크)
+            root.after(1000, check_ports)
+            
+    # 포트 체크
     ports = serial.tools.list_ports.comports()
-    print(ports)
     ports = [port for port in ports if not port.device.startswith('/dev/ttyAMA')]  # /dev/ttyAMA 포트를 제외
 
-    root = None  # root 변수를 초기화
-
+    # 1개의 포트가 있으면 창을 생성하지 않음
     if len(ports) == 1:
-        # 단일 포트가 발견된 경우
-#        root = tk.Tk()  # root 초기화
-        show_single_port_message(ports[0])  # show_single_port_message 호출
-#        root.mainloop()
-    elif len(ports) > 1:
-        # 여러 포트가 발견된 경우
+        show_single_port_message(ports[0])
+    else:
+        # 여러 포트가 발견되었을 때만 창을 생성
         root = tk.Tk()
-        root.title("COM 포트 선택")
-        tk.Label(root, text="여러 개의 COM 포트가 발견되었습니다. 선택하십시오:").pack()
-        for port in ports:
-            port_sel, desc, hwid = port
-            # 포트 정보를 직접 lambda에 전달
-            button = tk.Button(root, text=f"{port_sel}: {desc} [{hwid}]", command=lambda p=port_sel: select_port(p))
-            button.pack()
-        root.mainloop()
-    elif len(ports) == 0:
-        # 포트가 발견되지 않은 경우
-        root = tk.Tk()
-        root.title("COM 포트 선택")
-        show_no_ports_message()
-        root.mainloop()
+        root.title("COM port connect")
+        label = tk.Label(root, text="사용 중인 COM 포트가 없습니다")
+        label.pack()
 
+        # 포트를 주기적으로 체크
+        check_ports()
+
+        root.mainloop()
     # Tkinter 루프 종료 후 포트가 선택되었는지 확인
     if port_sel is not None:
         print(f"선택된 포트로 프로세스를 시작합니다: {port_sel}")
