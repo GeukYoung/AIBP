@@ -666,7 +666,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     plt.style.use('dark_background')
    
     range_of = {'pleth': (0, 5000), 'ecg': (-1.5, 2), 'abp': (40, 140)}
-    colors = ['lime', 'cyan', 'red']
+    colors = ['lime', 'cyan', 'red', '#333333']
 
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
@@ -803,6 +803,10 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     buff_tdelta_ppg = deque(maxlen=3) # for timediff stacking
     buff_base_time_ppg = deque(maxlen=16) # for smoothing
    
+    update_time_SPO2 = time.time()
+    update_time_HR = time.time()
+    textoff_time = 30
+    
     base_time_ecg = time.time()-100
     base_time_ppg = time.time()-100
     t_pre = time.time()
@@ -840,14 +844,22 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
 
             # UI data update
             if not HR == 0:
+                txt_HR.set_color(colors[0])
                 txt_HR.set_text("{0:.0f}".format(HR))
+                update_time_HR = time.time()
             else:
-                txt_HR.set_text("-")
+                if time.time() - update_time_HR >= textoff_time:
+                    txt_HR.set_text("-")
+                txt_HR.set_color(colors[3])
                 
             if not SPO2 == 0:
+                txt_SPO2.set_color(colors[1])
                 txt_SPO2.set_text("{0:.0f}".format(SPO2))
+                update_time_SPO2 = time.time()
             else:
-                txt_SPO2.set_text("-")
+                if time.time() - update_time_SPO2 >= textoff_time:
+                    txt_SPO2.set_text("-")
+                txt_SPO2.set_color(colors[3])
                 
             line_ecg.set_data(t_ecg, s_ecg)
             line_pleth.set_data(t_pleth, s_pleth)
@@ -857,12 +869,17 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
                 line_abp.set_data(t_pleth, s_abp)
                 
                 if not SPO2 == 0:
+                    txt_SBPDBP.set_color(colors[2])
+                    txt_MAP.set_color(colors[2])
                     txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1]) + "/" + "{0:.0f}".format(predict_abp[0]))
                     txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
                 else:
-                    txt_SBPDBP.set_text("- / -")
-                    txt_MAP.set_text("(-)")
-
+                    if time.time() - update_time_SPO2 >= textoff_time:
+                        txt_SBPDBP.set_text("- / -")
+                        txt_MAP.set_text("(-)")
+                    txt_SBPDBP.set_color(colors[3])
+                    txt_MAP.set_color(colors[3])
+                    
                 # abp ylim init
                 if abplim_first:
                     axis_min_abp_wave, axis_max_abp_wave = ylim_auto(s_abp, 0.2)
