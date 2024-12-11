@@ -28,6 +28,7 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from scipy import signal
 from scipy.signal import butter, filtfilt
 from functools import partial
+import threading
 import tensorflow as tf
 import serial
 import os
@@ -803,6 +804,11 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
     buff_tdelta_ppg = deque(maxlen=3) # for timediff stacking
     buff_base_time_ppg = deque(maxlen=16) # for smoothing
    
+    w_avgs = 20
+    buff_sBP = deque(maxlen=w_avgs)
+    buff_dBP = deque(maxlen=w_avgs)
+    buff_mBP = deque(maxlen=w_avgs)
+    
     update_time_SPO2 = time.time()
     update_time_HR = time.time()
     textoff_time = 30
@@ -869,10 +875,17 @@ def update_plot(q_wave, q_ABPoutput, stop_event):
                 line_abp.set_data(t_pleth, s_abp)
                 
                 if not SPO2 == 0:
+                    buff_dBP.append(predict_abp[0])
+                    buff_sBP.append(predict_abp[1])
+                    buff_mBP.append(predict_abp[2])
+                    avg_dBP = sum(buff_dBP) / len(buff_dBP)
+                    avg_sBP = sum(buff_sBP) / len(buff_sBP)
+                    avg_mBP = sum(buff_mBP) / len(buff_mBP)
+                    
                     txt_SBPDBP.set_color(colors[2])
                     txt_MAP.set_color(colors[2])
-                    txt_SBPDBP.set_text("{0:.0f}".format(predict_abp[1]) + "/" + "{0:.0f}".format(predict_abp[0]))
-                    txt_MAP.set_text("({0:.0f})".format(predict_abp[2]))
+                    txt_SBPDBP.set_text("{0:.0f}".format(avg_sBP) + "/" + "{0:.0f}".format(avg_dBP))
+                    txt_MAP.set_text("({0:.0f})".format(avg_mBP))
                 else:
                     if time.time() - update_time_SPO2 >= textoff_time:
                         txt_SBPDBP.set_text("- / -")
@@ -1125,6 +1138,14 @@ if __name__ == '__main__':
     # Attach any post-processing functions
     tstream.add_update_func(qos)
 
+    def watchdog():
+        print("data communication error: program restart")
+        q_wave.put('done')
+        p_plot.terminate()
+        p_ABP.terminate()
+        tstream.close()
+        sys.exit()
+            
     if 0: # not opts.gui
 
         # Create a main loop that just echoes the results to the loggers
@@ -1163,12 +1184,15 @@ if __name__ == '__main__':
         tstream.open()
        
         lastupdate_HR, lastupdate_SPO2 = 0, 0
-       
+
         try:
             while not stop_event.is_set():
                 now = time.time()
                 if now > (last_poll + tstream.polling_interval):
-                    data = tstream.read(1, blocking=True)
+                    timer = threading.Timer(5, watchdog)
+                    timer.start()
+                    data = tstream.read(1, blocking=False)
+                    timer.cancel()
                     t_receive = time.time()
                     if data:
                         temp = list(tstream.sampled_data.keys())
@@ -1181,7 +1205,6 @@ if __name__ == '__main__':
                                 buff_HR = 0
                             
                         SPO2 = data.get('SpO2')
-                        print(SPO2)
                         if SPO2:
                             buff_SPO2 = SPO2
                             lastupdate_SPO2 = time.time()
