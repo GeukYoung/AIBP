@@ -977,11 +977,11 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
             sbpdbp_alarm = False
             mbp_alarm = False
             
-            if HR!=None:
+            if HR!=None and HR!=0:
                 if HR<ALARM_THRESHOLDS['HR_LOW'] or HR>ALARM_THRESHOLDS['HR_HIGH']:
                     hr_alarm=True
 
-            if SPO2!=None:
+            if SPO2!=None and SPO2!=0:
                 if SPO2<ALARM_THRESHOLDS['SPO2_LOW']:
                     spo2_alarm=True
 
