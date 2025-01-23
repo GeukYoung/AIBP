@@ -30,6 +30,7 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from scipy import signal
 from scipy.signal import butter, filtfilt
 from functools import partial
+from itertools import cycle
 import threading
 import tensorflow as tf
 import serial
@@ -407,37 +408,6 @@ class PhilipsTelemetryStream(TelemetryStream):
 from time import sleep
 from gpiozero import PWMOutputDevice
 
-BUZZER_PIN = 18
-buzzer = PWMOutputDevice(BUZZER_PIN, active_high=True, initial_value=0)
-
-# 음계 주파수 정의
-FREQ = {
-    'C': 261.63,  
-    'F': 349.22,  
-    'A': 440.00 
-}
-
-MELODY = [
-    ('C', 0.2), 
-    ('A', 0.2), 
-    ('F', 0.2), 
-    ('REST', 0.2),
-    ('A', 0.2), 
-    ('F', 0.2),
-    ('REST', 0.6),
-    ('C', 0.2), 
-    ('A', 0.2), 
-    ('F', 0.2), 
-    ('REST', 0.2),
-    ('A', 0.2), 
-    ('F', 0.2),
-    ('REST', 1.2)
-]
-
-global alarm_playing, alarm_stop
-alarm_playing = False
-alarm_stop = False
-
 def play_melody(melody, repeat=2, rest=0.4, volume=0.8):
     """
     알람_stop이 True가 되면, '한 음 재생 도중'이라도 즉시 멈춘다.
@@ -538,7 +508,6 @@ def stop_alarm():
     alarm_stop = True
     buzzer.off()
 
-
 ##################################################
 # Plot 프로세스 함수 - GUI 표시용
 ##################################################
@@ -575,7 +544,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     # -------------------
     # 파라미터 세팅
     # -------------------
-    
+    global ALARM_THRESHOLDS
     ALARM_THRESHOLDS = {
         'HR_LOW': 50,
         'HR_HIGH':120,
@@ -616,8 +585,12 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
         margin_left_FPS = 1.2
         margin_top_FPS = 4.25
         margin_wspace, margin_hspace = 0.95, 0.5
-        margin_top, margin_bottom, margin_left, margin_right = 0.90, 0.05, 0.01, 0.95
+        margin_top, margin_bottom, margin_left, margin_right = 0.90, 0.05, 0.12, 0.95
 
+        margin_icon_left = 10
+        margin_icon_top = 60
+        margin_icon_gap = 100
+        
     import matplotlib.pyplot as plt
     plt.style.use('dark_background')
 
@@ -730,31 +703,36 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     #  유틸 함수들 (zoom, fps toggle 등)
     # -------------------------------------
     def ylim_auto(sig, gap_ratio):
+        import math
         valid_sig = [x for x in sig if x is not None and isinstance(x, (int, float))]
         if not valid_sig:
             return 0, 1
         mn, mx = min(valid_sig), max(valid_sig)
         gap = mx - mn
+        if gap <= 0 or math.isnan(mn) or math.isinf(mn) or math.isnan(mx) or math.isinf(mx):
+            return 0, 1
         return (mn - gap_ratio * gap), (mx + gap_ratio * gap)
 
     import numpy as np
 
     def on_click_zoom(event, fig, axes):
-        if event.inaxes in axes:
-            ax = event.inaxes
-            lines = ax.get_lines()
-            if lines:
-                ydata = np.concatenate([line.get_ydata() for line in lines])
-                ymin, ymax = ylim_auto(ydata, 0.2)
-                ax.set_ylim([ymin, ymax])
+        if not flag_lock:
+            if event.inaxes in axes:
+                ax = event.inaxes
+                lines = ax.get_lines()
+                if lines:
+                    ydata = np.concatenate([line.get_ydata() for line in lines])
+                    ymin, ymax = ylim_auto(ydata, 0.2)
+                    ax.set_ylim([ymin, ymax])
 
     def toggle_fps(event, txt, fig):
-        bbox = txt.get_window_extent(fig.canvas.get_renderer())
-        import time
-        if bbox.contains(event.x, event.y):
-            current_color = txt.get_color()
-            new_color = 'black' if current_color == 'white' else 'white'
-            txt.set_color(new_color)
+        if not flag_lock:
+            bbox = txt.get_window_extent(fig.canvas.get_renderer())
+            import time
+            if bbox.contains(event.x, event.y):
+                current_color = txt.get_color()
+                new_color = 'black' if current_color == 'white' else 'white'
+                txt.set_color(new_color)
 
     def on_close(event):
         print("Figure closed.")
@@ -764,16 +742,17 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     click_count = 0
     last_click_time = time.time()
     def check_clicks_and_close(event, fig, axes):
-        global click_count, last_click_time
-        current_time = time.time()
-        if current_time - last_click_time <= 1:
-            click_count += 1
-        else:
-            click_count = 1
-            last_click_time = current_time
-        if click_count >= 5:
-            stop_event.set()
-            fig.canvas.get_tk_widget().master.destroy()
+        if not flag_lock:
+            global click_count, last_click_time
+            current_time = time.time()
+            if current_time - last_click_time <= 1:
+                click_count += 1
+            else:
+                click_count = 1
+                last_click_time = current_time
+            if click_count >= 5:
+                stop_event.set()
+                fig.canvas.get_tk_widget().master.destroy()
 
     fig.canvas.mpl_connect(
         'button_press_event',
@@ -797,18 +776,236 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     #  알람 ON/OFF 버튼
     # ------------------------------------------------
     alarm_enabled = True
-
-    alarm_on_img = PhotoImage(file="Alarm_on.png").subsample(5, 5)
-    alarm_off_img = PhotoImage(file="Alarm_off.png").subsample(5, 5)
-
+    flag_lock = False
+    flag_autoscale = False
+    icon_scale = 3
+    
+    alarm_on_img = PhotoImage(file="icons/icon_Alarm_on.png").subsample(icon_scale, icon_scale)
+    alarm_off_img = PhotoImage(file="icons/icon_Alarm_off.png").subsample(icon_scale, icon_scale)
+    alarm_set_img = PhotoImage(file="icons/icon_Alarm_set.png").subsample(icon_scale, icon_scale)
+    auto_scale_img = PhotoImage(file="icons/icon_Autoscale.png").subsample(icon_scale, icon_scale)
+    lock_on_img = PhotoImage(file="icons/icon_Lock_on.png").subsample(icon_scale, icon_scale)
+    lock_off_img = PhotoImage(file="icons/icon_Lock_off.png").subsample(icon_scale, icon_scale)
+    
     def toggle_alarm_button():
-        nonlocal alarm_enabled
-        alarm_enabled = not alarm_enabled
-        if alarm_enabled:
-            button_alarm.config(image=alarm_on_img)
-        else:
-            button_alarm.config(image=alarm_off_img)
+        if not flag_lock:
+            nonlocal alarm_enabled
+            alarm_enabled = not alarm_enabled
+            if alarm_enabled:
+                button_alarm.config(image=alarm_on_img)
+            else:
+                button_alarm.config(image=alarm_off_img)
+          
+    # ------------------------------------------------
+    #  Alarm Set 버튼 눌렀을 때 동작할 함수
+    # ------------------------------------------------
+    def alarmset_button():
+        if not flag_lock:
+            """
+            메인화면(root) 내부에 Overlay Frame을 덮어씌우고,
+            'Alarm Threshold' 팝업 인터페이스를 표시.
+            Reset 버튼을 누르면 '윈도우 진입 시점'의 값으로 되돌린다.
+            """
+            global screen_width, screen_height
+            global ALARM_THRESHOLDS
 
+            # ---------------------------
+            # 1) Overlay 생성
+            # ---------------------------
+            overlay = tk.Frame(root, bg="black")
+            overlay.place(x=0, y=0, relwidth=1, relheight=1)
+            overlay.lift()
+            overlay.tkraise()
+            root.update_idletasks()
+            root.update()
+
+            # ---------------------------
+            # 2) Popup (gray) 프레임
+            # ---------------------------
+            popup_w = 600
+            popup_h = 500
+            popup = tk.Frame(overlay, bg="gray")
+            popup.pack_propagate(False)
+            popup.place(
+                width=popup_w,
+                height=popup_h,
+                relx=0.5,
+                rely=0.5,
+                anchor="center"
+            )
+
+            label_title = tk.Label(
+                popup,
+                text="Set Alarm Thresholds",
+                font=("Helvetica", 14, "bold"),
+                fg="yellow",
+                bg="gray"
+            )
+            label_title.pack(pady=10)
+
+            # ---------------------------
+            # [A] 로컬 스냅샷: 세팅 윈도우를 열었을 때 시점의 ALARM_THRESHOLDS
+            # ---------------------------
+            local_snapshot = ALARM_THRESHOLDS.copy()
+
+            # ---------------------------
+            # 3) 파라미터 목록
+            #    (주의) 아래는 (title, high_key, low_key) 순서임
+            # ---------------------------
+            param_keys = [
+                ("Heart Rate", "HR_HIGH", "HR_LOW"),
+                ("SpO2",       "SPO2_LOW", None),
+                ("Systolic",   "SBP_HIGH", "SBP_LOW"),
+                ("Diastolic",  "DBP_HIGH", "DBP_LOW"),
+                ("Mean BP",    "MBP_HIGH", "MBP_LOW"),
+            ]
+
+            param_frame = tk.Frame(popup, bg="gray")
+            param_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+            # 파라미터 라벨을 저장할 dict (key -> label 위젯)
+            label_map = {}
+
+            # + / - 버튼 클릭 시 ALARM_THRESHOLDS 갱신 + 라벨 업데이트
+            def increment_value(key, delta, label_widget):
+                ALARM_THRESHOLDS[key] += delta
+                label_widget.config(text=str(ALARM_THRESHOLDS[key]))
+
+            # ---------------------------
+            # 4) 2열(Grid) 배치
+            #    여기서는 첫 번째 인자: title, 두 번째: high_key, 세 번째: low_key
+            #    UI에서는 "HIGH 먼저, LOW 나중" 순서로 표시
+            # ---------------------------
+            for i, (title, high_key, low_key) in enumerate(param_keys):
+                row_idx = i // 2
+                col_idx = i % 2
+
+                frame_param = tk.Frame(param_frame, bg="gray", bd=1, relief="ridge")
+                frame_param.grid(row=row_idx, column=col_idx, padx=8, pady=6, sticky="nsew")
+
+                lbl_title = tk.Label(frame_param, text=title, fg="white", bg="gray",
+                                     font=("Helvetica", 12, "bold"))
+                lbl_title.pack(anchor="w", pady=2)
+
+                # ---- HIGH threshold ----
+                if high_key:
+                    row_high = tk.Frame(frame_param, bg="gray")
+                    row_high.pack(anchor="w", padx=8, pady=2)
+
+                    # 현재(세팅 윈도우 열었을 때) 값
+                    initial_val_high = ALARM_THRESHOLDS.get(high_key, 0)
+                    lbl_highval = tk.Label(row_high, text=str(initial_val_high),
+                                           fg="cyan", bg="gray", font=("Arial", 16, "bold"))
+
+
+                    btn_high_minus = tk.Button(
+                        row_high, text="-", width=3,
+                        command=lambda k=high_key, l=lbl_highval: increment_value(k, -1, l)
+                    )
+                    btn_high_plus = tk.Button(
+                        row_high, text="+", width=3,
+                        command=lambda k=high_key, l=lbl_highval: increment_value(k, 1, l)
+                    )
+
+                    btn_high_minus.pack(side="left", padx=5)
+                    btn_high_plus.pack(side="left", padx=5)
+
+                    lbl_highname = tk.Label(row_high, text=f"{high_key}:", fg="white", bg="gray")
+                    lbl_highname.pack(side="left", padx=5)
+                    lbl_highval.pack(side="left", padx=5)
+                    # label_map 저장
+                    label_map[high_key] = lbl_highval
+
+                # ---- LOW threshold ----
+                if low_key:
+                    row_low = tk.Frame(frame_param, bg="gray")
+                    row_low.pack(anchor="w", padx=8, pady=2)
+
+                    initial_val_low = ALARM_THRESHOLDS.get(low_key, 0)
+                    lbl_lowval = tk.Label(row_low, text=str(initial_val_low),
+                                          fg="cyan", bg="gray", font=("Arial", 16, "bold"))
+
+
+                    btn_low_minus = tk.Button(
+                        row_low, text="-", width=3,
+                        command=lambda k=low_key, l=lbl_lowval: increment_value(k, -1, l)
+                    )
+                    btn_low_plus = tk.Button(
+                        row_low, text="+", width=3,
+                        command=lambda k=low_key, l=lbl_lowval: increment_value(k, 1, l)
+                    )
+
+                    btn_low_minus.pack(side="left", padx=5)
+                    btn_low_plus.pack(side="left", padx=5)
+
+                    lbl_lowname = tk.Label(row_low, text=f"{low_key}:", fg="white", bg="gray")
+                    lbl_lowname.pack(side="left", padx=5)
+                    lbl_lowval.pack(side="left", padx=5)
+                    label_map[low_key] = lbl_lowval
+
+            # ---------------------------
+            # 5) Reset / Confirm
+            # ---------------------------
+            def confirm_and_close():
+                # 지금까지 변경된 ALARM_THRESHOLDS가 그대로 유지
+                overlay.destroy()
+
+            def cancle_and_close():
+                """
+                세팅윈도우를 열었을 때(local_snapshot) 값으로 되돌린다
+                + 라벨들도 다시 업데이트
+                """
+                ALARM_THRESHOLDS.clear()
+                ALARM_THRESHOLDS.update(local_snapshot)
+
+                # 저장된 label_map을 통해, 라벨 갱신
+                for key, lbl in label_map.items():
+                    lbl.config(text=str(ALARM_THRESHOLDS[key]))
+
+            frame_btns = tk.Frame(popup, bg="gray")
+            frame_btns.pack(pady=1)
+            
+            btn_confirm = tk.Button(
+                frame_btns,
+                text="Confirm",
+                bg="green",
+                fg="white",
+                font=("Helvetica", 15, "bold"),
+                command=confirm_and_close
+            )
+            btn_confirm.pack(side="left", padx=10)
+            
+            btn_cancel = tk.Button(
+                frame_btns,
+                text="Cancel",
+                bg="red",
+                fg="white",
+                font=("Helvetica", 15, "bold"),
+                command=cancle_and_close
+            )
+            btn_cancel.pack(side="left", padx=10)
+            # ---------------------------
+            # 6) 오버레이 다시 끌어올림
+            # ---------------------------
+            overlay.lift()
+            overlay.tkraise()
+            root.update_idletasks()
+            root.update()
+
+    def toggle_lock_button():
+        nonlocal flag_lock
+        flag_lock = not flag_lock
+        if flag_lock:
+            button_lock.config(image=lock_on_img)
+        else:
+            button_lock.config(image=lock_off_img)
+
+    def autoscale_button():
+        if not flag_lock:
+            nonlocal flag_autoscale
+            flag_autoscale = True
+    
+    # Alarm Button
     button_alarm = tk.Button(
         root,
         image=alarm_on_img,
@@ -821,13 +1018,70 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
         takefocus=0,
         command=toggle_alarm_button
     )
-    # 우측 상단
     button_alarm.place(
-        x=screen_width,  # 오른쪽 가장자리
-        y=0,
-        anchor="ne"
+        x=margin_icon_left,
+        y=margin_icon_top,
+        anchor="nw"
     )
-
+    
+    # Alarmset Button
+    button_Alarmset = tk.Button(
+        root,
+        image=alarm_set_img,
+        bd=0,
+        highlightthickness=0,
+        relief="flat",
+        overrelief="flat",
+        background="black",
+        activebackground="black",
+        takefocus=0,
+        command=alarmset_button
+    )
+    button_Alarmset.place(
+        x=margin_icon_left,
+        y=margin_icon_top + margin_icon_gap,
+        anchor="nw"
+    )
+    
+    # Autoscale Button
+    button_autoscale = tk.Button(
+        root,
+        image=auto_scale_img,
+        bd=0,
+        highlightthickness=0,
+        relief="flat",
+        overrelief="flat",
+        background="black",
+        activebackground="black",
+        takefocus=0,
+        command=autoscale_button
+    )
+    button_autoscale.place(
+        x=margin_icon_left,
+        y=margin_icon_top + 2*margin_icon_gap,
+        anchor="nw"
+    )
+    
+    # Lock Button
+    button_lock = tk.Button(
+        root,
+        image=lock_off_img,
+        bd=0,
+        highlightthickness=0,
+        relief="flat",
+        overrelief="flat",
+        background="black",
+        activebackground="black",
+        takefocus=0,
+        command=toggle_lock_button
+    )
+    # 우측 상단
+    button_lock.place(
+        x=margin_icon_left,
+        y=margin_icon_top + 3*margin_icon_gap,
+        anchor="nw"
+    )
+    
     # ===============================================
     #   알람 깜빡임 관련 변수 (추가)
     # ===============================================
@@ -876,7 +1130,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     base_time_ecg = time.time() - 100
     base_time_ppg = time.time() - 100
     t_pre = time.time()
-    abplim_first = 1
+    abplim_update = True
     skip_frame = 3
     buff_frame = 0
 
@@ -964,11 +1218,20 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
                     txt_MAP.set_color(colors[3])
 
                 # ABP y-limit 초기에만
-                if abplim_first:
+                if abplim_update:
                     ymin, ymax = ylim_auto(s_abp, 0.2)
                     ax_wABP.set_ylim((ymin, ymax))
-                    abplim_first = 0
+                    abplim_update = False
 
+            if flag_autoscale:
+                ymin, ymax = ylim_auto(s_ecg, 0.2)
+                ax_wECG.set_ylim((ymin, ymax))
+                ymin, ymax = ylim_auto(s_pleth, 0.2)
+                ax_wPPG.set_ylim((ymin, ymax))
+                if is_estiABP:
+                    ymin, ymax = ylim_auto(s_abp, 0.2)
+                    ax_wABP.set_ylim((ymin, ymax))
+                flag_autoscale = False
             # ------------------
             #  알람 범위 체크
             # ------------------
@@ -1131,7 +1394,10 @@ def esti_ABP(q_ABPinput, q_ABPoutput, ABP_event):
 
     def minmax_normalize(signal):
         mn, mx = np.min(signal), np.max(signal)
-        return (signal - mn)/(mx - mn), mn, mx
+        if mn-mx == 0:
+            return (signal - mn)/0.0000001, mn, mx
+        else:
+            return (signal - mn)/(mx - mn), mn, mx
 
     def apply_low_pass_filter(data, cutoff, sf, order=4, padlen=None):
         from scipy.signal import butter, filtfilt
@@ -1193,6 +1459,12 @@ if __name__ == '__main__':
     # ======================
     # 포트 선택 로직
     # ======================
+    def update_loading_icon():
+        global loading_label
+        next_frame = next(loading_frames)  # 다음 프레임 가져오기
+        loading_label.config(text=next_frame)  # 텍스트 업데이트
+        root.after(300, update_loading_icon)  # 300ms 후 재호출
+
     def select_port(selected_port):
         global port_sel
         port_sel = selected_port
@@ -1229,9 +1501,14 @@ if __name__ == '__main__':
         show_single_port_message(ports[0])
     else:
         root = tk.Tk()
-        root.title("COM port connect")
-        label = tk.Label(root, text="Connect Data Cable")
-        label.pack()
+        root.title("USB Port Connection")
+        root.geometry("300x150")  # 창 크기 설정
+        label = tk.Label(root, text="Waiting for USB connection...", font=("Arial", 12))
+        label.pack(pady=20)
+        loading_frames = cycle(["◐", "◓", "◑", "◒"])  # 간단한 원형 로딩 효과
+        loading_label = tk.Label(root, text="", font=("Arial", 20))
+        loading_label.pack(pady=10)
+        update_loading_icon()
         check_ports()
         root.mainloop()
 
@@ -1282,7 +1559,36 @@ if __name__ == '__main__':
 
     # 알람 상태
     alarm_condition = False
+    BUZZER_PIN = 18
 
+    # 음계 주파수 정의
+    FREQ = {
+        'C': 261.63,  
+        'F': 349.22,  
+        'A': 440.00 
+    }
+
+    MELODY = [
+        ('C', 0.2), 
+        ('A', 0.2), 
+        ('F', 0.2), 
+        ('REST', 0.2),
+        ('A', 0.2), 
+        ('F', 0.2),
+        ('REST', 0.6),
+        ('C', 0.2), 
+        ('A', 0.2), 
+        ('F', 0.2), 
+        ('REST', 0.2),
+        ('A', 0.2), 
+        ('F', 0.2),
+        ('REST', 1.2)
+    ]
+
+    global alarm_playing, alarm_stop
+    alarm_playing = False
+    alarm_stop = False
+    
     def watchdog():
         print("data communication error: program restart")
         q_wave.put('done')
@@ -1293,6 +1599,7 @@ if __name__ == '__main__':
         os._exit(1)
 
     try:
+        buzzer = PWMOutputDevice(BUZZER_PIN, active_high=True, initial_value=0)
         while not stop_event.is_set():
             now = time.time()
             # Telemetry Poll
