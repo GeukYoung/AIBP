@@ -582,7 +582,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
         'SPO2_LOW':90,
         'SBP_LOW':90,
         'SBP_HIGH':160,
-        'DBP_LOW':50,
+        'DBP_LOW':45,
         'DBP_HIGH':90,
         'MBP_LOW':70,
         'MBP_HIGH':110
@@ -845,9 +845,9 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     
     # 색상 정의
     color_HR_normal     = colors[0]  # lime
-    color_HR_alarm      = 'red'
+    color_HR_alarm      = 'yellow'
     color_SPO2_normal   = colors[1]  # cyan
-    color_SPO2_alarm    = 'red'
+    color_SPO2_alarm    = 'yellow'
     color_BP_normal     = colors[2]  # red
     color_BP_alarm      = 'yellow'
 
@@ -1230,7 +1230,7 @@ if __name__ == '__main__':
     else:
         root = tk.Tk()
         root.title("COM port connect")
-        label = tk.Label(root, text="사용 중인 COM 포트가 없습니다")
+        label = tk.Label(root, text="Connect Data Cable")
         label.pack()
         check_ports()
         root.mainloop()
@@ -1242,6 +1242,7 @@ if __name__ == '__main__':
                                          polling_interval=0.05)
     else:
         print("포트가 선택되지 않았습니다.")
+        buzzer.close()
         os._exit(0)
 
     # QoS
@@ -1288,6 +1289,7 @@ if __name__ == '__main__':
         p_plot.terminate()
         p_ABP.terminate()
         tstream.close()
+        buzzer.close()
         os._exit(1)
 
     try:
@@ -1361,6 +1363,7 @@ if __name__ == '__main__':
         p_plot.terminate()
         p_ABP.terminate()
         tstream.close()
+        buzzer.close()
         os._exit(0)
 
     except:
@@ -1369,5 +1372,6 @@ if __name__ == '__main__':
         p_plot.terminate()
         p_ABP.terminate()
         tstream.close()
+        buzzer.close() 
         os._exit(0)
 
