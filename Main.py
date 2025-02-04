@@ -1,12 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-@author: SNUBH: 02/07/2024
-
-(멀티프로세스 구조에서 Plot 프로세스와 메인 프로세스 분리.
- Plot 프로세스는 알람 "필요 여부"만 신호로 보내고,
- 메인 프로세스가 GPIO로 알람 제어하는 방식)
-"""
-
 from __future__ import unicode_literals
 
 import argparse
@@ -31,6 +22,8 @@ from scipy import signal
 from scipy.signal import butter, filtfilt
 from functools import partial
 from itertools import cycle
+from time import sleep
+from gpiozero import PWMOutputDevice
 import threading
 import tensorflow as tf
 import serial
@@ -405,76 +398,80 @@ class PhilipsTelemetryStream(TelemetryStream):
 ##################################################
 # 알람 (GPIO) 코드 - 메인 프로세스에서만 사용
 ##################################################
-from time import sleep
-from gpiozero import PWMOutputDevice
-
-def play_melody(melody, repeat=2, rest=0.4, volume=0.8):
-    """
-    알람_stop이 True가 되면, '한 음 재생 도중'이라도 즉시 멈춘다.
-    """
+def play_melody(repeat=2, rest=0.4, volume=0.8):
     global alarm_stop
+
+    FREQ = {
+        'C': 261.63,  
+        'F': 349.22,  
+        'A': 440.00 
+    }
+
+    melody = [
+        ('C', 0.2), ('A', 0.2), ('F', 0.2), ('REST', 0.2),
+        ('A', 0.2), ('F', 0.2), ('REST', 0.6),
+        ('C', 0.2), ('A', 0.2), ('F', 0.2), ('REST', 0.2),
+        ('A', 0.2), ('F', 0.2), ('REST', 1.2)
+    ]
     
-    # 한번에 너무 많이 sleep하지 않기 (즉시 해제 가능하도록)
-    SLEEP_STEP = 0.01  # 10ms 단위로 check
-
-    for _ in range(repeat):
-        if alarm_stop:
-            break
-
-        for note, duration in melody:
+    SLEEP_STEP = 0.01
+    BUZZER_PIN = 18
+    
+    buzzer = PWMOutputDevice(BUZZER_PIN, active_high=True, initial_value=0)  # 객체 생성
+    
+    try:
+        for _ in range(repeat):
             if alarm_stop:
                 break
 
-            if note == 'REST':
-                # 쉬는 부분도 중간에 멈출 수 있게
-                end_time = time.time() + duration
-                while time.time() < end_time:
-                    if alarm_stop:
-                        break
-                    time.sleep(SLEEP_STEP)
-                buzzer.value = 0  # 혹시나 안전을 위해
-            elif note in FREQ:
-                # 음 재생
-                buzzer.value = 0
-                time.sleep(0.01)
-                buzzer.frequency = FREQ[note]
-                buzzer.value = volume
-
-                # duration 동안 짧게 sleep하며 alarm_stop 체크
-                end_time = time.time() + duration
-                while time.time() < end_time:
-                    if alarm_stop:
-                        break
-                    time.sleep(SLEEP_STEP)
-
-                # 음 끄기
-                buzzer.value = 0
-
+            for note, duration in melody:
                 if alarm_stop:
                     break
 
-                # note 사이 짧은 쉼
-                end_time2 = time.time() + 0.05
-                while time.time() < end_time2:
+                if note == 'REST':
+                    end_time = time.time() + duration
+                    while time.time() < end_time:
+                        if alarm_stop:
+                            break
+                        time.sleep(SLEEP_STEP)
+                    buzzer.value = 0
+                elif note in FREQ:
+                    buzzer.value = 0
+                    time.sleep(0.01)
+                    buzzer.frequency = FREQ[note]
+                    buzzer.value = volume
+
+                    end_time = time.time() + duration
+                    while time.time() < end_time:
+                        if alarm_stop:
+                            break
+                        time.sleep(SLEEP_STEP)
+
+                    buzzer.value = 0
+
+                    if alarm_stop:
+                        break
+
+                    end_time2 = time.time() + 0.05
+                    while time.time() < end_time2:
+                        if alarm_stop:
+                            break
+                        time.sleep(SLEEP_STEP)
+
+            if not alarm_stop:
+                end_time_rest = time.time() + rest
+                while time.time() < end_time_rest:
                     if alarm_stop:
                         break
                     time.sleep(SLEEP_STEP)
-            # 알람_stop이 True면 내부 for-loop 탈출
+
             if alarm_stop:
                 break
-
-        # 멜로디 한 번을 모두 돌고 난 뒤 쉼
-        if not alarm_stop:
-            end_time_rest = time.time() + rest
-            while time.time() < end_time_rest:
-                if alarm_stop:
-                    break
-                time.sleep(SLEEP_STEP)
-
-        if alarm_stop:
-            break
-
-    buzzer.off()
+    finally:
+        print("buzzer off 1")
+        buzzer.off()  # PWM 출력 종료
+        buzzer.close()  # 리소스 해제
+        del buzzer  # 객체 삭제
 
 def alarm_thread_func():
     global alarm_playing, alarm_stop
@@ -483,7 +480,7 @@ def alarm_thread_func():
         # 알람 조건이 해제될 때까지 계속 무한반복
         while not alarm_stop:
             # 멜로디 1회( repeat=2 번 반복 ) 재생
-            play_melody(MELODY, repeat=2, rest=0.9, volume=0.4)
+            play_melody(repeat=2, rest=0.9, volume=0.4)
             # 한 번 다 돌았어도 alarm_stop이 여전히 False라면 다음 루프로
             # 중간 중간에도 play_melody 내부에서 alarm_stop 체크하므로 즉시 정지 가능
     except Exception as e:
@@ -491,7 +488,6 @@ def alarm_thread_func():
     finally:
         alarm_playing = False
         alarm_stop = False
-        buzzer.off()
         print("[DEBUG] alarm_thread_func() end")
 
 def trigger_alarm():
@@ -506,15 +502,11 @@ def trigger_alarm():
 def stop_alarm():
     global alarm_stop
     alarm_stop = True
-    buzzer.off()
 
 ##################################################
 # Plot 프로세스 함수 - GUI 표시용
 ##################################################
 def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
-    """
-    그래프 표시용 프로세스. (기존 코드 + 알람조건 확장 + 텍스트 blink 추가)
-    """
 
     from tkinter import Toplevel, PhotoImage, Button
     import matplotlib.pyplot as plt
@@ -524,8 +516,6 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     from collections import deque
     import numpy as np
     from functools import partial
-    import time
-    import tkinter as tk
 
     def create_main_window():
         root = Toplevel()
@@ -538,7 +528,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     root = create_main_window()
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
-    # 이미 거의 풀스크린이지만 +2 해상도로 임시 조정
+
     root.geometry(f"{screen_width+2}x{screen_height+2}+0+0")
 
     # -------------------
@@ -591,14 +581,14 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
         margin_icon_top = 60
         margin_icon_gap = 100
         
-    import matplotlib.pyplot as plt
-    plt.style.use('dark_background')
+    image_path = 'AI_logo.png'
+    icon_AI = mpimg.imread(image_path)
+    imagebox = OffsetImage(icon_AI, zoom=icon_zoom)
 
-    # 색상 범위
+    plt.style.use('dark_background')
     range_of = {'pleth': (0, 5000), 'ecg': (-1.5, 2), 'abp': (40, 140)}
     colors = ['lime', 'cyan', 'red', '#333333']
 
-    # 메인 Figure 생성
     fig = plt.Figure(figsize=(screen_width / 100, screen_height / 100))
     fig.subplots_adjust(wspace=margin_wspace, hspace=margin_hspace,
                         top=margin_top, bottom=margin_bottom,
@@ -641,16 +631,9 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     ax_wABP = fig.add_subplot(gs[2, 0:4])
     ax_wABP.set_title("ABP", loc='left', fontweight='bold', color=colors[2],
                       fontsize=fontsize_default * fontsize_title)
-    import matplotlib.image as mpimg
-    from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-    image_path = 'AI_logo.png'
-    icon_AI = mpimg.imread(image_path)
-    icon_zoom = 0.038
-    imagebox = OffsetImage(icon_AI, zoom=icon_zoom)
-    art_icon1 = AnnotationBbox(imagebox, (-0.018, 1.03),
+    art_icon1 = AnnotationBbox(imagebox, (margin_left_AIicon1, margin_top_AIicon1),
                                xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
     ax_wABP.add_artist(art_icon1)
-
     ax_wABP.set_xticklabels([])
     ax_wABP.set_yticklabels([])
     ax_wABP.tick_params(axis='both', which='both', length=0)
@@ -662,40 +645,39 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     #  Numeric Text (HR, SpO2, ABP)
     # -----------------------------
     ax_nECG = fig.add_subplot(gs[0, 4])
-    ax_nECG.text(-0.8, 1.17, "HR",
+    ax_nECG.text(margin_left_numtitle, margin_top_numtitle, "HR",
                  ha='left', va='center', color=colors[0],
                  fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_HR = ax_nECG.text(0.2, 0.48, "-",
+    txt_HR = ax_nECG.text(margin_left_numeric, margin_top_numeric, "-",
                           ha='center', va='center', color=colors[0],
                           fontsize=fontsize_default * fontsize_numeric)
     ax_nECG.axis('off')
 
     ax_nPPG = fig.add_subplot(gs[1, 4])
-    ax_nPPG.text(-0.8, 1.17, "SpO2",
+    ax_nPPG.text(margin_left_numtitle, margin_top_numtitle, "SpO2",
                  ha='left', va='center', color=colors[1],
                  fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_SPO2 = ax_nPPG.text(0.2, 0.48, "-",
+    txt_SPO2 = ax_nPPG.text(margin_left_numeric, margin_top_numeric, "-",
                             ha='center', va='center', color=colors[1],
                             fontsize=fontsize_default * fontsize_numeric)
     ax_nPPG.axis('off')
 
     ax_nBP = fig.add_subplot(gs[2, 4])
-    ax_nBP.text(-0.8, 1.17, "ABP",
+    ax_nBP.text(margin_left_numtitle, margin_top_numtitle, "ABP",
                 ha='left', va='center', color=colors[2],
                 fontsize=fontsize_default * fontsize_title, fontweight='bold')
-    txt_SBPDBP = ax_nBP.text(0.25, 0.65, "- / -",
+    txt_SBPDBP = ax_nBP.text(margin_left_numeric + 0.05, margin_top_txtBP1, "- / -",
                              ha='center', va='center', color=colors[2],
                              fontsize=fontsize_default * fontsize_numeric_BP)
-    txt_MAP = ax_nBP.text(0.25, 0.10, "(-)",
+    txt_MAP = ax_nBP.text(margin_left_numeric + 0.05, margin_top_txtBP2, "(-)",
                           ha='center', va='center', color=colors[2],
                           fontsize=fontsize_default * fontsize_numeric_BP)
     ax_nBP.axis('off')
-    imagebox2 = OffsetImage(icon_AI, zoom=icon_zoom)
-    art_icon2 = AnnotationBbox(imagebox2, (-0.92, 1.05),
+    art_icon2 = AnnotationBbox(imagebox, (margin_left_AIicon2, margin_top_AIicon2),
                                xycoords='axes fraction', frameon=False, box_alignment=(-1.9, 0))
     ax_nBP.add_artist(art_icon2)
 
-    txt_FPS = ax_nBP.text(1.2, 4.25, "-/-",
+    txt_FPS = ax_nBP.text(margin_left_FPS, margin_top_FPS, "-/-",
                           ha='right', va='center', color='black',
                           fontsize=fontsize_default * fontsize_numeric_BP * 0.3)
 
@@ -740,7 +722,8 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
 
     global click_count, last_click_time
     click_count = 0
-    last_click_time = time.time()
+    last_click_time = time.time()  # ← time.time() 호출
+
     def check_clicks_and_close(event, fig, axes):
         if not flag_lock:
             global click_count, last_click_time
@@ -754,6 +737,9 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
                 stop_event.set()
                 fig.canvas.get_tk_widget().master.destroy()
 
+    # -----------------------------------
+    #  이벤트 연결
+    # -----------------------------------
     fig.canvas.mpl_connect(
         'button_press_event',
         partial(on_click_zoom, fig=fig, axes=[ax_wECG, ax_wPPG, ax_wABP])
@@ -773,7 +759,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     canvas.get_tk_widget().pack(side="top", fill="both", expand=1)
 
     # ------------------------------------------------
-    #  알람 ON/OFF 버튼
+    #  알람 ON/OFF 버튼 추가
     # ------------------------------------------------
     alarm_enabled = True
     flag_lock = False
@@ -1090,7 +1076,9 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     spo2_alarm_active = False
     sdbp_alarm_active   = False
     mbp_alarm_active   = False
-    
+    spo2_na = False
+    hr_na = False
+            
     # 항목별 blink 토글상태
     blink_HR_state   = False
     blink_SPO2_state = False
@@ -1100,11 +1088,14 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     # 색상 정의
     color_HR_normal     = colors[0]  # lime
     color_HR_alarm      = 'yellow'
+    color_HR_na         = 'gray'
     color_SPO2_normal   = colors[1]  # cyan
     color_SPO2_alarm    = 'yellow'
+    color_SPO2_na       = 'gray'
     color_BP_normal     = colors[2]  # red
     color_BP_alarm      = 'yellow'
-
+    color_BP_na         = 'gray'
+    
     # 깜빡임 주기
     blink_interval = 0.5
     last_blink_time = time.time()
@@ -1112,7 +1103,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     # ===============================================
     #  주루프에서 사용하는 버퍼들
     # ===============================================
-    from collections import deque
+    
     buff_tdelta_ecg = deque(maxlen=3)
     buff_base_time_ecg = deque(maxlen=16)
     buff_tdelta_ppg = deque(maxlen=3)
@@ -1130,27 +1121,22 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     base_time_ecg = time.time() - 100
     base_time_ppg = time.time() - 100
     t_pre = time.time()
-    abplim_update = True
+    abplim_first = 1
     skip_frame = 3
     buff_frame = 0
 
     while not stop_event.is_set():
-        # ------------------
-        #  데이터 수신
-        # ------------------
         if not q_ABPoutput.empty():
             (t_ecg, s_ecg, t_pleth, s_pleth,
              s_abp, predict_abp,
              HR, SPO2, t_receive, is_estiABP) = q_ABPoutput.get(timeout=0)
 
-            # 스무딩 관련
             if skip_frame > 0:
                 skip_frame -= 1
             else:
                 buff_tdelta_ecg.append(t_receive - t_ecg[-1])
                 buff_tdelta_ppg.append(t_receive - t_pleth[-1])
                 if skip_frame > -5:
-                    # y축 자동
                     ymin, ymax = ylim_auto(s_ecg, 0.2)
                     ax_wECG.set_ylim((ymin, ymax))
                     ymin, ymax = ylim_auto(s_pleth, 0.2)
@@ -1164,11 +1150,9 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
                     base_time_ecg = sum(buff_base_time_ecg) / len(buff_base_time_ecg)
                     base_time_ppg = sum(buff_base_time_ppg) / len(buff_base_time_ppg)
 
-            # ------------------
-            #  HR / SPO2 표시
-            # ------------------
+            # HR / SPO2 텍스트
             if not HR == 0:
-                txt_HR.set_color(colors[0])  # 기본색(실시간은 깜빡임과 별개)
+                txt_HR.set_color(colors[0])
                 txt_HR.set_text("{0:.0f}".format(HR))
                 update_time_HR = time.time()
             else:
@@ -1185,43 +1169,35 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
                     txt_SPO2.set_text("-")
                 txt_SPO2.set_color(colors[3])
 
-            # ------------------
-            #  파형 업데이트 (ECG/PPG/ABP)
-            # ------------------
+            # ECG, PPG 파형 업데이트
             line_ecg.set_data(t_ecg, s_ecg)
             line_pleth.set_data(t_pleth, s_pleth)
 
-            # ABP
+            # ABP 파형
             if is_estiABP:
                 line_abp.set_data(t_pleth, s_abp)
-
                 if not SPO2 == 0:
-                    # BP 버퍼
-                    buff_dBP.append(predict_abp[0])  # DBP
-                    buff_sBP.append(predict_abp[1])  # SBP
-                    buff_mBP.append(predict_abp[2])  # MBP
-
+                    buff_dBP.append(predict_abp[0])
+                    buff_sBP.append(predict_abp[1])
+                    buff_mBP.append(predict_abp[2])
                     avg_dBP = sum(buff_dBP)/len(buff_dBP)
                     avg_sBP = sum(buff_sBP)/len(buff_sBP)
                     avg_mBP = sum(buff_mBP)/len(buff_mBP)
-
-                    txt_SBPDBP.set_color(colors[2])  # red
+                    txt_SBPDBP.set_color(colors[2])
                     txt_MAP.set_color(colors[2])
                     txt_SBPDBP.set_text("{0:.0f}/{1:.0f}".format(avg_sBP, avg_dBP))
                     txt_MAP.set_text("({0:.0f})".format(avg_mBP))
-
                 else:
                     if time.time() - update_time_SPO2 >= textoff_time:
                         txt_SBPDBP.set_text("- / -")
                         txt_MAP.set_text("(-)")
                     txt_SBPDBP.set_color(colors[3])
                     txt_MAP.set_color(colors[3])
-
-                # ABP y-limit 초기에만
-                if abplim_update:
+                    
+                if abplim_first:
                     ymin, ymax = ylim_auto(s_abp, 0.2)
                     ax_wABP.set_ylim((ymin, ymax))
-                    abplim_update = False
+                    abplim_first = 0
 
             if flag_autoscale:
                 ymin, ymax = ylim_auto(s_ecg, 0.2)
@@ -1232,6 +1208,7 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
                     ymin, ymax = ylim_auto(s_abp, 0.2)
                     ax_wABP.set_ylim((ymin, ymax))
                 flag_autoscale = False
+                
             # ------------------
             #  알람 범위 체크
             # ------------------
@@ -1241,12 +1218,18 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
             mbp_alarm = False
             
             if HR!=None and HR!=0:
+                hr_na = False
                 if HR<ALARM_THRESHOLDS['HR_LOW'] or HR>ALARM_THRESHOLDS['HR_HIGH']:
-                    hr_alarm=True
+                    hr_alarm = True
+            elif HR==None or HR==0:
+                hr_na = True
 
             if SPO2!=None and SPO2!=0:
+                spo2_na = False
                 if SPO2<ALARM_THRESHOLDS['SPO2_LOW']:
-                    spo2_alarm=True
+                    spo2_alarm = True
+            elif SPO2==None or SPO2==0:
+                spo2_na = True
 
             if is_estiABP and len(buff_sBP)>0 and len(buff_dBP)>0 and len(buff_mBP)>0:
                 asbp=sum(buff_sBP)/len(buff_sBP)
@@ -1254,14 +1237,18 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
                 ambp=sum(buff_mBP)/len(buff_mBP)
 
                 # sBP/dBP 하나라도 벗어나면 -> sbpdbp_alarm
-                if asbp<ALARM_THRESHOLDS['SBP_LOW'] or asbp>ALARM_THRESHOLDS['SBP_HIGH'] or \
-                   adbp<ALARM_THRESHOLDS['DBP_LOW'] or adbp>ALARM_THRESHOLDS['DBP_HIGH']:
-                    sbpdbp_alarm=True
+                if not spo2_na:
+                    if asbp<ALARM_THRESHOLDS['SBP_LOW'] or asbp>ALARM_THRESHOLDS['SBP_HIGH'] or \
+                       adbp<ALARM_THRESHOLDS['DBP_LOW'] or adbp>ALARM_THRESHOLDS['DBP_HIGH']:
+                        sbpdbp_alarm=True
 
-                # mBP
-                if ambp<ALARM_THRESHOLDS['MBP_LOW'] or ambp>ALARM_THRESHOLDS['MBP_HIGH']:
-                    mbp_alarm=True
-
+                    # mBP
+                    if ambp<ALARM_THRESHOLDS['MBP_LOW'] or ambp>ALARM_THRESHOLDS['MBP_HIGH']:
+                        mbp_alarm=True
+                else:
+                    sbpdbp_alarm=False
+                    mbp_alarm=False
+                    
             # 항목별 알람 상태 갱신
             hr_alarm_active   = hr_alarm
             spo2_alarm_active = spo2_alarm
@@ -1284,70 +1271,57 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
         if now - last_blink_time >= blink_interval:
             last_blink_time = now
             # HR blink
-            if hr_alarm_active:
+            if hr_alarm_active and not hr_na:
                 blink_HR_state = not blink_HR_state
                 txt_HR.set_color(color_HR_alarm if blink_HR_state else color_HR_normal)
-            else:
+            elif not hr_na:
                 blink_HR_state = False
-                # 만약 매 프레임마다 set_color가 필요하면(이미 위에서 set_color 했지만 다시 보정):
                 txt_HR.set_color(color_HR_normal)
-
+                    
             # SpO2 blink
-            if spo2_alarm_active:
+            if spo2_alarm_active and not spo2_na:
                 blink_SPO2_state = not blink_SPO2_state
                 txt_SPO2.set_color(color_SPO2_alarm if blink_SPO2_state else color_SPO2_normal)
-            else:
+            elif not spo2_na:
                 blink_SPO2_state = False
                 txt_SPO2.set_color(color_SPO2_normal)
 
             # BP blink
-            if sdbp_alarm_active:
+            if sdbp_alarm_active and not spo2_na:
                 blink_sdBP_state = not blink_sdBP_state
                 color_now = color_BP_alarm if blink_sdBP_state else color_BP_normal
                 txt_SBPDBP.set_color(color_now)
-                txt_MAP.set_color(color_now)
-            else:
+            elif not spo2_na:
                 blink_sdBP_state = False
                 txt_SBPDBP.set_color(color_BP_normal)
-                txt_MAP.set_color(color_BP_normal)
 
             # BP blink
-            if mbp_alarm_active:
+            if mbp_alarm_active and not spo2_na:
                 blink_mBP_state = not blink_mBP_state
                 color_now = color_BP_alarm if blink_mBP_state else color_BP_normal
                 txt_MAP.set_color(color_now)
-            else:
+            elif not spo2_na:
                 blink_mBP_state = False
                 txt_MAP.set_color(color_BP_normal)
-                
-        # ------------------
-        # xlim 업데이트
-        # ------------------
+
         now_t = time.time() - base_time_ecg - 1.7
         ax_wECG.set_xlim(now_t - 5, now_t)
         now_t = time.time() - base_time_ppg - 2.0
         ax_wPPG.set_xlim(now_t - 5, now_t)
         ax_wABP.set_xlim(now_t - 5, now_t)
 
-        # ------------------
         # FPS
-        # ------------------
         execution_time = time.time() - t_pre
         t_pre = time.time()
         if execution_time == 0:
             execution_time = 0.01
         txt_FPS.set_text("{0:.0f} fps".format(1 / execution_time))
 
-        # ------------------
-        # GUI 업데이트
-        # ------------------
         fig.canvas.draw()
         root.update_idletasks()
         root.update()
 
-    # 끝
     root.mainloop()
-
 
 
 
@@ -1519,7 +1493,6 @@ if __name__ == '__main__':
                                          polling_interval=0.05)
     else:
         print("포트가 선택되지 않았습니다.")
-        buzzer.close()
         os._exit(0)
 
     # QoS
@@ -1557,49 +1530,21 @@ if __name__ == '__main__':
     t_lastTrans = time.time()
     lastupdate_HR, lastupdate_SPO2 = 0, 0
 
-    # 알람 상태
-    alarm_condition = False
-    BUZZER_PIN = 18
-
-    # 음계 주파수 정의
-    FREQ = {
-        'C': 261.63,  
-        'F': 349.22,  
-        'A': 440.00 
-    }
-
-    MELODY = [
-        ('C', 0.2), 
-        ('A', 0.2), 
-        ('F', 0.2), 
-        ('REST', 0.2),
-        ('A', 0.2), 
-        ('F', 0.2),
-        ('REST', 0.6),
-        ('C', 0.2), 
-        ('A', 0.2), 
-        ('F', 0.2), 
-        ('REST', 0.2),
-        ('A', 0.2), 
-        ('F', 0.2),
-        ('REST', 1.2)
-    ]
-
     global alarm_playing, alarm_stop
     alarm_playing = False
     alarm_stop = False
+    alarm_condition = False
     
     def watchdog():
         print("data communication error: program restart")
+        print("buzzer off2")
         q_wave.put('done')
         p_plot.terminate()
         p_ABP.terminate()
         tstream.close()
-        buzzer.close()
         os._exit(1)
 
     try:
-        buzzer = PWMOutputDevice(BUZZER_PIN, active_high=True, initial_value=0)
         while not stop_event.is_set():
             now = time.time()
             # Telemetry Poll
@@ -1670,7 +1615,6 @@ if __name__ == '__main__':
         p_plot.terminate()
         p_ABP.terminate()
         tstream.close()
-        buzzer.close()
         os._exit(0)
 
     except:
@@ -1679,6 +1623,4 @@ if __name__ == '__main__':
         p_plot.terminate()
         p_ABP.terminate()
         tstream.close()
-        buzzer.close() 
         os._exit(0)
-
