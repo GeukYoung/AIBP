@@ -515,8 +515,9 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     from matplotlib.offsetbox import OffsetImage, AnnotationBbox
     from collections import deque
     import numpy as np
+    import math
     from functools import partial
-
+    
     def create_main_window():
         root = Toplevel()
         root.attributes('-fullscreen', True)
@@ -685,16 +686,43 @@ def update_plot(q_wave, q_ABPoutput, stop_event, q_alarm_flag):
     #  유틸 함수들 (zoom, fps toggle 등)
     # -------------------------------------
     def ylim_auto(sig, gap_ratio):
-        import math
         valid_sig = [x for x in sig if x is not None and isinstance(x, (int, float))]
         if not valid_sig:
             return 0, 1
-        mn, mx = min(valid_sig), max(valid_sig)
+        
+        # 피스메이커 신호 감지 (1000 이상의 값이 존재하며, 시계열의 중앙값이 100 이하인 경우)
+        
+        if max(valid_sig) >= 100 and min(valid_sig) <= 10:
+            # 피스메이커 신호 제거: 100 이상인 값과 그 인접 값도 제외
+            filtered_sig = []
+            skip_next = False
+            for i in range(len(valid_sig)):
+                if skip_next:
+                    skip_next = False
+                    continue
+                if valid_sig[i] >= 100:
+                    if filtered_sig:
+                        filtered_sig.pop # remove before
+                    skip_next = True  # remove next
+                    continue
+                filtered_sig.append(valid_sig[i])
+            
+            if not filtered_sig:
+                return 0, 1
+            
+            mn, mx = min(filtered_sig), max(filtered_sig)
+            print('max value')
+            print(mx)
+            mx = min(mx * 3, 1000)  # R 피크를 고려하여 최대값의 3배 제한
+        else:
+            mn, mx = min(valid_sig), max(valid_sig)
+        
         gap = mx - mn
         if gap <= 0 or math.isnan(mn) or math.isinf(mn) or math.isnan(mx) or math.isinf(mx):
             return 0, 1
+        
         return (mn - gap_ratio * gap), (mx + gap_ratio * gap)
-
+        
     import numpy as np
 
     def on_click_zoom(event, fig, axes):
